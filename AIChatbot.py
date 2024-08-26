@@ -11,7 +11,7 @@ pinecone_api_key = st.secrets["PINECONE_API_KEY"]
 perplexity_api_key = st.secrets["PERPLEXITY_API_KEY"]
 
 # Initialize Pinecone
-pinecone.init(api_key=pinecone_api_key, environment="aped-4627-b74a")  # Replace with your actual environment
+pinecone.init(api_key=pinecone_api_key, environment="us-east-1")  # Replace with your actual environment
 index = pinecone.Index("conference")
 
 # Initialize SentenceTransformer for encoding
