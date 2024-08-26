@@ -233,6 +233,7 @@ def main():
     """
     prompt = ChatPromptTemplate.from_template(template)
 
+
     def format_docs(docs: List[Document]) -> str:
         formatted = []
         for doc in docs:
@@ -316,28 +317,6 @@ def main():
             finally:
                 status_placeholder.empty()
                 progress_bar.empty()
-
-if __name__ == "__main__":
-    main()           
-                
-            except Exception as e:
-                st.error(f"오류 발생: {str(e)}")
-            finally:
-                status_placeholder.empty()
-                progress_bar.empty()
-            
-            st.markdown(response['answer'])
-            
-            with st.expander("Sources"):
-                st.write("Conference Sources:")
-                for doc in response['docs']:
-                    st.write(f"- {doc.metadata['source']}")
-                
-                st.write("\nPerplexity Search Results:")
-                for result in response['perplexity_results']:
-                    st.write(f"- {result['content']}")
-            
-            st.session_state.messages.append({"role": "assistant", "content": response['answer']})
 
 if __name__ == "__main__":
     main()
