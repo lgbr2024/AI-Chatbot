@@ -20,46 +20,7 @@ os.environ["PINECONE_API_KEY"] = st.secrets["pinecone_api_key"]
 os.environ["PERPLEXITY_API_KEY"] = st.secrets["perplexity_api_key"]
 
 class ModifiedPineconeVectorStore(PineconeVectorStore):
-    def __init__(self, index, embedding, text_key: str = "text", namespace: str = ""):
-        super().__init__(index, embedding, text_key, namespace)
-        self.index = index
-        self._embedding = embedding
-        self._text_key = text_key
-        self._namespace = namespace
-
-    def max_marginal_relevance_search_by_vector(
-        self, embedding: List[float], k: int = 8, fetch_k: int = 30,
-        lambda_mult: float = 0.7, filter: Dict[str, Any] = None, namespace: str = None
-    ) -> List[Document]:
-        namespace = namespace or self._namespace
-        results = self.index.query(
-            vector=embedding,
-            top_k=fetch_k,
-            include_metadata=True,
-            include_values=True,
-            filter=filter,
-            namespace=namespace,
-        )
-        if not results['matches']:
-            return []
-        
-        embeddings = [match['values'] for match in results['matches']]
-        mmr_selected = maximal_marginal_relevance(
-            np.array(embedding, dtype=np.float32),
-            embeddings,
-            k=min(k, len(results['matches'])),
-            lambda_mult=lambda_mult
-        )
-        
-        return [
-            Document(
-                page_content=results['matches'][i]['metadata'].get(self._text_key, ""),
-                metadata={
-                    'source': results['matches'][i]['metadata'].get('source', '').replace('C:\\Users\\minje\\data2\\', '') if 'source' in results['matches'][i]['metadata'] else 'Unknown'
-                }
-            )
-            for i in mmr_selected
-        ]
+    # ... (이전 코드와 동일)
 
 def maximal_marginal_relevance(
     query_embedding: np.ndarray,
@@ -67,23 +28,7 @@ def maximal_marginal_relevance(
     k: int = 4,
     lambda_mult: float = 0.5
 ) -> List[int]:
-    similarity_scores = cosine_similarity([query_embedding], embedding_list)[0]
-    selected_indices = []
-    candidate_indices = list(range(len(embedding_list)))
-    for _ in range(k):
-        if not candidate_indices:
-            break
-        
-        mmr_scores = [
-            lambda_mult * similarity_scores[i] - (1 - lambda_mult) * max(
-                [cosine_similarity([embedding_list[i]], [embedding_list[s]])[0][0] for s in selected_indices] or [0]
-            )
-            for i in candidate_indices
-        ]
-        max_index = candidate_indices[np.argmax(mmr_scores)]
-        selected_indices.append(max_index)
-        candidate_indices.remove(max_index)
-    return selected_indices
+    # ... (이전 코드와 동일)
 
 def fetch_perplexity_results(query: str) -> List[Dict[str, Any]]:
     api_url = "https://api.perplexity.ai/search"
@@ -133,12 +78,11 @@ def main():
         search_kwargs={"k": 10, "fetch_k": 20, "lambda_mult": 0.7}
     )
     
-    # Set up prompt template and chain
-    template = """
+    # Set up prompt template and chain for Pinecone results
+    pinecone_template = """
     <prompt>
     Question: {question} 
     Context from Pinecone: {context} 
-    Additional Context from Perplexity: {perplexity_context}
     Answer:
 
     <context>
@@ -147,13 +91,13 @@ def main():
       -LG Group individual business executives
       -LG Group representative
     </audience>
-    <knowledge_base>Conference file saved in vector database and additional information from Perplexity search</knowledge_base>
+    <knowledge_base>Conference file saved in vector database</knowledge_base>
     <goal>Find and provide organized content related to the conference that matches the questioner's inquiry, along with sources, to help derive project insights.</goal>
     </context>
 
     <task>
     <description>
-     Describe about 15,000+ words for covering industrial changes, issues, and response strategies related to the conference. Explicitly reflect and incorporate the [research principles] throughout your analysis and recommendations. 
+     Describe about 10,000+ words for covering industrial changes, issues, and response strategies related to the conference. Explicitly reflect and incorporate the [research principles] throughout your analysis and recommendations. 
     </description>
 
     <format>
@@ -182,12 +126,12 @@ def main():
         - USE THE PROVIDED CONTEXT TO ANSWER THE QUESTION
         - IF YOU DON'T KNOW THE ANSWER, ADMIT IT HONESTLY
         - ANSWER IN KOREAN AND PROVIDE RICH SENTENCES TO ENHANCE THE QUALITY OF THE ANSWER
-        - ADHERE TO THE LENGTH CONSTRAINTS FOR EACH SECTION. [CONFERENCE OVERVIEW] ABOUT 4000 WORDS / [CONTENTS] ABOUT 7000 WORDS / [CONCLUSION] ABOUT 4000 WORDS
+        - ADHERE TO THE LENGTH CONSTRAINTS FOR EACH SECTION. [CONFERENCE OVERVIEW] ABOUT 3000 WORDS / [CONTENTS] ABOUT 5000 WORDS / [CONCLUSION] ABOUT 2000 WORDS
     </constraints>
     </task>
     </prompt>
     """
-    prompt = ChatPromptTemplate.from_template(template)
+    pinecone_prompt = ChatPromptTemplate.from_template(pinecone_template)
 
     def format_docs(docs: List[Document]) -> str:
         formatted = []
@@ -197,13 +141,64 @@ def main():
         return "\n\n" + "\n\n".join(formatted)
 
     format = itemgetter("docs") | RunnableLambda(format_docs)
-    answer = prompt | llm | StrOutputParser()
-    chain = (
+    pinecone_answer = pinecone_prompt | llm | StrOutputParser()
+    pinecone_chain = (
         RunnableParallel(question=RunnablePassthrough(), docs=retriever)
         .assign(context=format)
-        .assign(answer=answer)
+        .assign(answer=pinecone_answer)
         .pick(["answer", "docs"])
     )
+
+    # Set up prompt template for Perplexity results
+    perplexity_template = """
+    <prompt>
+    Question: {question} 
+    Additional Context from Perplexity: {perplexity_context}
+    Answer:
+
+    <context>
+    <role>Strategic consultant for LG Group, providing additional insights based on Perplexity search results.</role>
+    <audience>
+      -LG Group individual business executives
+      -LG Group representative
+    </audience>
+    <knowledge_base>Additional information from Perplexity search</knowledge_base>
+    <goal>Provide supplementary insights and information related to the conference question.</goal>
+    </context>
+
+    <task>
+    <description>
+     Describe about 5,000+ words for providing additional context and insights based on the Perplexity search results. 
+    </description>
+
+    <format>
+     [Additional Insights]
+        - Summarize key points from the Perplexity search results
+        - Highlight any new or different perspectives compared to the Pinecone results
+        - Provide additional examples or case studies if available
+                   
+     [Complementary Analysis]
+        - Analyze how the Perplexity results complement or contrast with the Pinecone results
+        - Suggest any new trends or insights that emerge from this additional information
+          
+      [Final Thoughts]
+        - Summarize how the Perplexity results enhance the overall understanding of the topic
+        - Suggest any additional follow-up questions or areas for further research
+    </format>
+
+    <style>Business writing with clear and concise sentences targeted at executives</style>
+
+    <constraints>
+        - USE THE PROVIDED PERPLEXITY CONTEXT TO ANSWER THE QUESTION
+        - IF YOU DON'T KNOW THE ANSWER, ADMIT IT HONESTLY
+        - ANSWER IN KOREAN AND PROVIDE RICH SENTENCES TO ENHANCE THE QUALITY OF THE ANSWER
+        - ADHERE TO THE LENGTH CONSTRAINTS FOR EACH SECTION. [ADDITIONAL INSIGHTS] ABOUT 2000 WORDS / [COMPLEMENTARY ANALYSIS] ABOUT 2000 WORDS / [FINAL THOUGHTS] ABOUT 1000 WORDS
+    </constraints>
+    </task>
+    </prompt>
+    """
+    perplexity_prompt = ChatPromptTemplate.from_template(perplexity_template)
+    perplexity_answer = perplexity_prompt | llm | StrOutputParser()
 
     # Display chat history
     for message in st.session_state.messages:
@@ -230,47 +225,48 @@ def main():
                 # Step 2: Searching Pinecone Database
                 status_placeholder.text("Searching Pinecone database...")
                 progress_bar.progress(40)
-                pinecone_response = chain.invoke(question)
+                pinecone_response = pinecone_chain.invoke(question)
                 time.sleep(1)  # Simulate search time
                 
-                # Step 3: Fetching Perplexity Results
-                status_placeholder.text("Fetching Perplexity results...")
+                # Step 3: Displaying Pinecone Results
+                status_placeholder.text("Displaying Pinecone results...")
                 progress_bar.progress(60)
+                st.subheader("Pinecone Search Results")
+                st.markdown(pinecone_response['answer'])
+                with st.expander("Pinecone Sources"):
+                    for doc in pinecone_response['docs']:
+                        st.write(f"- {doc.metadata['source']}")
+                
+                # Step 4: Fetching Perplexity Results
+                status_placeholder.text("Fetching Perplexity results...")
+                progress_bar.progress(80)
                 perplexity_results = fetch_perplexity_results(question)
                 perplexity_context = format_search_results(perplexity_results)
                 time.sleep(1)  # Simulate API call time
                 
-                # Step 4: Generating Answer
-                status_placeholder.text("Generating answer...")
-                progress_bar.progress(80)
-                combined_context = f"{pinecone_response['context']}\n\nAdditional Context from Perplexity:\n{perplexity_context}"
-                final_response = answer.invoke({"question": question, "context": combined_context, "perplexity_context": perplexity_context})
+                # Step 5: Generating Perplexity Answer
+                status_placeholder.text("Generating additional insights from Perplexity...")
+                progress_bar.progress(90)
+                perplexity_response = perplexity_answer.invoke({"question": question, "perplexity_context": perplexity_context})
                 time.sleep(1)  # Simulate generation time
                 
-                # Step 5: Finalizing Response
-                status_placeholder.text("Finalizing response...")
+                # Step 6: Displaying Perplexity Results
+                status_placeholder.text("Displaying Perplexity results...")
                 progress_bar.progress(100)
-                time.sleep(0.5)  # Short pause to show completion
+                st.subheader("Additional Insights from Perplexity")
+                st.markdown(perplexity_response)
+                with st.expander("Perplexity Sources"):
+                    for result in perplexity_results:
+                        st.write(f"- {result.get('source', 'Unknown source')}")
                 
             finally:
                 # Clear status displays
                 status_placeholder.empty()
                 progress_bar.empty()
             
-            # Display the answer
-            st.markdown(final_response)
-            
-            # Display sources
-            with st.expander("Pinecone Sources"):
-                for doc in pinecone_response['docs']:
-                    st.write(f"- {doc.metadata['source']}")
-            
-            with st.expander("Perplexity Sources"):
-                for result in perplexity_results:
-                    st.write(f"- {result.get('source', 'Unknown source')}")
-            
             # Add assistant's response to chat history
-            st.session_state.messages.append({"role": "assistant", "content": final_response})
+            combined_response = f"Pinecone Results:\n\n{pinecone_response['answer']}\n\nAdditional Insights from Perplexity:\n\n{perplexity_response}"
+            st.session_state.messages.append({"role": "assistant", "content": combined_response})
 
 if __name__ == "__main__":
     main()
