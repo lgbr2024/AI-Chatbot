@@ -17,9 +17,6 @@ index = pinecone.Index("conference")
 # Initialize SentenceTransformer for encoding
 model = SentenceTransformer('all-MiniLM-L6-v2')
 
-# Initialize Perplexity
-perplexity = Perplexity(api_key=perplexity_api_key)
-
 def adjust_vector_dimension(vector, target_dim=1536):
     """Adjust vector dimension to match Pinecone index"""
     current_dim = len(vector)
@@ -31,31 +28,30 @@ def adjust_vector_dimension(vector, target_dim=1536):
         return vector[:target_dim]
     return vector
 
-def search_knowledge_base(query, top_k=5):
+def search_vectors(query, top_k=5):
     query_vector = model.encode(query).tolist()
     adjusted_vector = adjust_vector_dimension(query_vector)
     results = index.query(vector=adjusted_vector, top_k=top_k, include_metadata=True)
     return [match['metadata'].get('text', 'No text available') for match in results['matches']]
 
-def generate_response(query, context):
-    prompt = f"Query: {query}\n\nContext:\n" + "\n".join(context)
+def send_query_to_perplexity(query, context):
+    url = 'https://api.perplexity.ai/chat/completions'
     headers = {
-        "Authorization": f"Bearer {perplexity_api_key}",
-        "Content-Type": "application/json"
+        'Authorization': f'Bearer {perplexity_api_key}',
+        'Content-Type': 'application/json'
     }
+    prompt = f"Query: {query}\n\nContext:\n" + "\n".join(context)
     data = {
         "model": "mistral-7b-instruct",
         "messages": [{"role": "user", "content": prompt}]
     }
-    response = requests.post("https://api.perplexity.ai/chat/completions", json=data, headers=headers)
-    if response.status_code == 200:
-        return response.json()['choices'][0]['message']['content']
-    else:
-        return f"Error: {response.status_code}, {response.text}"
+    response = requests.post(url, json=data, headers=headers)
+    response.raise_for_status()
+    return response.json()['choices'][0]['message']['content']
 
 def chatbot(query):
-    context = search_knowledge_base(query)
-    response = generate_response(query, context)
+    context = search_vectors(query)
+    response = send_query_to_perplexity(query, context)
     return response
 
 # Streamlit UI
@@ -95,3 +91,8 @@ with st.sidebar:
     if st.button("Clear Chat History"):
         st.session_state.messages = []
         st.experimental_rerun()
+
+if __name__ == '__main__':
+    # The Streamlit app is already defined in the code above,
+    # so we don't need an explicit main() function call here.
+    pass
