@@ -111,11 +111,6 @@ def maximal_marginal_relevance(
         candidate_indices.remove(max_index)
     return selected_indices
 
-import requests
-from typing import List, Dict
-import os
-import streamlit as st
-
 def get_perplexity_results(query: str, max_results: int = 5) -> List[Dict[str, str]]:
     url = "https://api.perplexity.ai/chat/completions"
     payload = {
@@ -181,8 +176,8 @@ def main():
     template = """
     <prompt>
     Question: {question} 
-    Context: {context} 
-    Perplexity Results: {perplexity_results}
+    Conference Context: {conference_context} 
+    Web Search Results: {web_search_results}
     Answer:
 
     <context>
@@ -192,65 +187,85 @@ def main():
       -LG Group representative
     </audience>
     <knowledge_base>Conference file saved in vector database and additional web search results from Perplexity</knowledge_base>
-    <goal>Find and provide organized content related to the conference that matches the questioner's inquiry, along with sources, to help derive project insights. Incorporate relevant information from Perplexity web search results when appropriate.</goal>
+    <goal>Find and provide organized content related to the conference that matches the questioner's inquiry, along with sources, to help derive project insights. Incorporate relevant information from web search results when appropriate.</goal>
     </context>
 
     <task>
     <description>
-     Describe about 15,000+ words for covering industrial changes, issues, and response strategies related to the conference. Explicitly reflect and incorporate the [research principles] throughout your analysis and recommendations. Integrate relevant information from the Perplexity web search results to provide a more comprehensive answer.
+     Provide two separate answers: one based on the conference context, and another based on web search results. Each answer should cover industrial changes, issues, and response strategies related to the question. Explicitly reflect and incorporate the [research principles] throughout your analysis and recommendations.
     </description>
 
     <format>
-     [Conference Overview]
+     [Conference Answer]
+      [Conference Overview]
         - Explain the overall context of the conference related to the question
         - Introduce the main points or topics
                    
-     [Contents]
+      [Conference Contents]
         - Analyze the key content discussed at the conference and reference.
         - For each key session or topic:
           - Gather the details as thoroughly as possible, then categorize them according to the following format: 
             - Topic : 
             - Fact : {{1. Provide a detailed description of approximately 5 sentences. 2. Include specific examples, data points, or case studies mentioned in the session. }}
             - Your opinion : {{Provide a detailed description of approximately 3 sentences.}}
-            - Source : {{Show 2~3 data sources for each key topic, including Perplexity results when relevant}}
+            - Source : {{Show 2~3 data sources for each key topic}}
           
-      [Conclusion]
-        - Summarize new trends based on the conference content and additional web search results
-        - Present derived insights, incorporating both conference information and web search data
-        - Suggest 3 follow-up questions that the LG Group representative might ask, and provide brief answers to each (3~4 sentences)
+      [Conference Conclusion]
+        - Summarize new trends based on the conference content
+        - Present derived insights
+        - Suggest 2 follow-up questions that the LG Group representative might ask, and provide brief answers to each (2~3 sentences)
+
+     [Web Search Answer]
+      [Web Search Overview]
+        - Provide an overview of the web search results related to the question
+        - Highlight the main points or topics found in the web search
+
+      [Web Search Contents]
+        - Analyze the key information found in the web search results
+        - For each main point or topic:
+          - Topic:
+          - Key Findings: {{Provide a detailed description of approximately 3-4 sentences}}
+          - Relevance to LG: {{Explain how this information is relevant to LG Group in 2-3 sentences}}
+          - Source: {{Indicate the Perplexity search result this information came from}}
+
+      [Web Search Conclusion]
+        - Summarize the main insights from the web search results
+        - Compare and contrast with the conference information if applicable
+        - Suggest 1 follow-up question based on the web search results, and provide a brief answer (2-3 sentences)
     </format>
 
     <style>Business writing with clear and concise sentences targeted at executives</style>
 
     <constraints>
-        - USE THE PROVIDED CONTEXT AND PERPLEXITY RESULTS TO ANSWER THE QUESTION
+        - USE THE PROVIDED CONFERENCE CONTEXT AND WEB SEARCH RESULTS TO ANSWER THE QUESTION
         - IF YOU DON'T KNOW THE ANSWER, ADMIT IT HONESTLY
         - ANSWER IN KOREAN AND PROVIDE RICH SENTENCES TO ENHANCE THE QUALITY OF THE ANSWER
-        - ADHERE TO THE LENGTH CONSTRAINTS FOR EACH SECTION. [CONFERENCE OVERVIEW] ABOUT 4000 WORDS / [CONTENTS] ABOUT 7000 WORDS / [CONCLUSION] ABOUT 4000 WORDS
+        - ADHERE TO THE LENGTH CONSTRAINTS FOR EACH SECTION
+        - SEPARATE YOUR ANSWER INTO TWO MAIN PARTS: [Conference Answer] AND [Web Search Answer], EACH WITH THEIR OWN SUBSECTIONS AS SPECIFIED IN THE FORMAT
+        - USE THE EXACT SECTION HEADERS PROVIDED
     </constraints>
     </task>
     </prompt>
     """
     prompt = ChatPromptTemplate.from_template(template)
 
-
     def format_docs(docs: List[Document]) -> str:
         formatted = []
         for doc in docs:
             source = doc.metadata.get('source', 'Unknown source')
-            formatted.append(f"Source: {source}")
-        return "\n\n" + "\n\n".join(formatted)
+            formatted.append(f"Source: {source}\nContent: {doc.page_content}")
+        return "\n\n".join(formatted)
 
     def format_perplexity_results(results: List[Dict[str, str]]) -> str:
         return "\n\n".join([f"Perplexity Result: {result['content']}" for result in results])
 
-    format = itemgetter("docs") | RunnableLambda(format_docs)
-    format_perplexity = itemgetter("perplexity_results") | RunnableLambda(format_perplexity_results)
+    format_conference = itemgetter("docs") | RunnableLambda(format_docs)
+    format_web_search = itemgetter("perplexity_results") | RunnableLambda(format_perplexity_results)
     answer = prompt | llm | StrOutputParser()
     chain = (
         RunnableParallel(question=RunnablePassthrough(), docs=retriever)
-        .assign(context=format)
-        .assign(perplexity_formatted=format_perplexity)
+        .assign(conference_context=format_conference)
+        .assign(web_search_results=format_web_search)
         .assign(answer=answer)
         .pick(["answer", "docs", "perplexity_results"])
     )
@@ -258,7 +273,7 @@ def main():
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
-    
+
     if question := st.chat_input("Please ask a question about the conference:"):
         st.session_state.messages.append({"role": "user", "content": question})
         with st.chat_message("user"):
@@ -294,24 +309,29 @@ def main():
                 if isinstance(response, dict) and 'answer' in response:
                     answer_content = response['answer']
                     if isinstance(answer_content, str):
-                        st.markdown(answer_content)
-                        st.session_state.messages.append({"role": "assistant", "content": answer_content})
-                    else:
-                        st.error("예상치 못한 응답 형식: 문자열이 아님")
-                        st.write("응답:", answer_content)
-                else:
-                    st.error("예상치 못한 응답 형식")
-                    st.write("응답:", response)
-                
-                with st.expander("Sources"):
-                    st.write("Conference Sources:")
-                    for doc in response.get('docs', []):
-                        st.write(f"- {doc.metadata['source']}")
-                    
-                    st.write("\nPerplexity Search Results:")
-                    for result in response.get('perplexity_results', []):
-                        st.write(f"- {result['content']}")
-                
+                        # 답변을 Conference Answer와 Web Search Answer로 분리
+                        main_sections = answer_content.split('[Conference Answer]')[1].split('[Web Search Answer]')
+                        conference_answer = main_sections[0].strip()
+                        web_search_answer = main_sections[1].strip() if len(main_sections) > 1 else "Web search answer not provided."
+
+                        # Conference Answer 표시
+                        with st.expander("[Conference Answer]"):
+                            sections = conference_answer.split('[')
+                            for section in sections[1:]:
+                                section_title = '[' + section.split(']')[0] + ']'
+                                section_content = ']'.join(section.split(']')[1:]).strip()
+                                st.subheader(section_title)
+                                st.markdown(section_content)
+
+                        # Web Search Answer 표시
+                        with st.expander("[Web Search Answer]"):
+                            sections = web_search_answer.split('[')
+                            for section in sections[1:]:
+                                section_title = '[' + section.split(']')[0] + ']'
+                                section_content = ']'.join(section.split(']')[1:]).strip()
+                                st.subheader(section_title)
+                                st.markdown(section_content)
+                                
             except Exception as e:
                 st.error(f"오류 발생: {str(e)}")
             finally:
