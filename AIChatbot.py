@@ -245,7 +245,7 @@ def main():
 
     format = itemgetter("docs") | RunnableLambda(format_docs)
     format_perplexity = itemgetter("perplexity_results") | RunnableLambda(format_perplexity_results)
-    answer = prompt | llm | RunnableLambda(lambda x: {"answer": x})
+    answer = prompt | llm | StrOutputParser()
     chain = (
         RunnableParallel(question=RunnablePassthrough(), docs=retriever)
         .assign(context=format)
