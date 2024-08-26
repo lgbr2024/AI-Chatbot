@@ -1,6 +1,5 @@
 import streamlit as st
 import os
-from dotenv import load_dotenv
 from operator import itemgetter
 from typing import List, Tuple, Dict, Any
 from pinecone import Pinecone
