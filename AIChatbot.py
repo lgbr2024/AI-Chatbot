@@ -18,6 +18,14 @@ os.environ["OPENAI_API_KEY"] = st.secrets["openai_api_key"]
 os.environ["PINECONE_API_KEY"] = st.secrets["pinecone_api_key"]
 os.environ["PERPLEXITY_API_KEY"] = st.secrets["perplexity_api_key"]
 
+try:
+    os.environ["OPENAI_API_KEY"] = st.secrets["openai_api_key"]
+    os.environ["PINECONE_API_KEY"] = st.secrets["pinecone_api_key"]
+    os.environ["PERPLEXITY_API_KEY"] = st.secrets["perplexity_api_key"]
+except KeyError as e:
+    st.error(f"필요한 API 키가 설정되지 않았습니다: {e}")
+    st.stop()
+    
 class ModifiedPineconeVectorStore(PineconeVectorStore):
     def __init__(self, index, embedding, text_key: str = "text", namespace: str = ""):
         super().__init__(index, embedding, text_key, namespace)
@@ -129,14 +137,18 @@ def get_perplexity_results(query: str, max_results: int = 5) -> List[Dict[str, s
         "authorization": f"Bearer {os.getenv('PERPLEXITY_API_KEY')}"
     }
 
-    response = requests.post(url, json=payload, headers=headers)
-    if response.status_code == 200:
+    try:
+        response = requests.post(url, json=payload, headers=headers)
+        response.raise_for_status()  # HTTP 오류 발생 시 예외를 발생시킴
         content = response.json()['choices'][0]['message']['content']
-        # Parse the content to extract individual results
         results = content.split('\n\n')[:max_results]
         return [{"content": result} for result in results]
-    else:
-        return [{"content": "Error fetching Perplexity results."}]
+    except requests.exceptions.RequestException as e:
+        st.error(f"Perplexity API 요청 오류: {e}")
+        return [{"content": f"Perplexity 결과 가져오기 오류: {str(e)}"}]
+    except Exception as e:
+        st.error(f"예상치 못한 오류 발생: {e}")
+        return [{"content": "Perplexity 결과 처리 중 오류 발생."}]
 
 def main():
     st.title("Robot Conference Q&A System")
