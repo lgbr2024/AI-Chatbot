@@ -2,3 +2,4 @@ streamlit==1.24.0
 pinecone-client==2.2.1
 sentence-transformers==2.2.2
 requests==2.26.0
+pillow==9.5.0
