@@ -290,6 +290,36 @@ def main():
                 progress_bar.progress(100)
                 time.sleep(0.5)
                 
+                if isinstance(response, dict) and 'answer' in response:
+                    answer_content = response['answer']
+                    if isinstance(answer_content, str):
+                        st.markdown(answer_content)
+                        st.session_state.messages.append({"role": "assistant", "content": answer_content})
+                    else:
+                        st.error("예상치 못한 응답 형식: 문자열이 아님")
+                        st.write("응답:", answer_content)
+                else:
+                    st.error("예상치 못한 응답 형식")
+                    st.write("응답:", response)
+                
+                with st.expander("Sources"):
+                    st.write("Conference Sources:")
+                    for doc in response.get('docs', []):
+                        st.write(f"- {doc.metadata['source']}")
+                    
+                    st.write("\nPerplexity Search Results:")
+                    for result in response.get('perplexity_results', []):
+                        st.write(f"- {result['content']}")
+                
+            except Exception as e:
+                st.error(f"오류 발생: {str(e)}")
+            finally:
+                status_placeholder.empty()
+                progress_bar.empty()
+
+if __name__ == "__main__":
+    main()           
+                
             except Exception as e:
                 st.error(f"오류 발생: {str(e)}")
             finally:
