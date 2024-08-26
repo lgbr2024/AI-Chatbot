@@ -134,14 +134,19 @@ def get_perplexity_results(query: str, max_results: int = 5) -> List[Dict[str, s
     }
 
     try:
+        print(f"Sending request to Perplexity API: {url}")
+        print(f"Headers: {headers}")
+        print(f"Payload: {payload}")
         response = requests.post(url, json=payload, headers=headers)
         response.raise_for_status()
         content = response.json()['choices'][0]['message']['content']
         results = content.split('\n\n')[:max_results]
         return [{"content": result} for result in results]
     except requests.exceptions.RequestException as e:
+        print(f"Perplexity API error response: {e.response.text if e.response else 'No response'}")
         return [{"content": f"Perplexity 결과 가져오기 오류: {str(e)}"}]
     except Exception as e:
+        print(f"Unexpected error: {str(e)}")
         return [{"content": f"예상치 못한 오류 발생: {str(e)}"}]
 
 def main():
