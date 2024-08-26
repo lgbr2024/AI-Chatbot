@@ -85,20 +85,28 @@ def format_docs(docs: List[Document]) -> str:
 def format_perplexity_results(results: List[Dict[str, str]]) -> str:
     return "\n\n".join([f"Perplexity Result: {result['content']}" for result in results])
 
-def get_response(question, perplexity_results, retriever, llm):
-    # 1. 검색 결과 또는 문서 검색기를 사용하여 관련 문서나 데이터를 추출합니다.
-    docs_results = retriever.retrieve(question)
+def get_response(question, perplexity_results, vectorstore, llm):
+    # 질문에 대한 임베딩 생성
+    question_embedding = vectorstore._embedding.encode([question])[0].tolist()
 
-    # 2. ChatOpenAI 모델을 사용하여 질문에 대한 답변을 생성합니다.
+    # VectorStore에서 MMR 검색 실행
+    docs_results = vectorstore.max_marginal_relevance_search_by_vector(
+        embedding=question_embedding,
+        k=10,  # 최대 10개 문서 반환
+        fetch_k=20  # 상위 20개 후보에서 MMR 실행
+    )
+
+    # ChatOpenAI 모델을 사용하여 질문에 대한 답변을 생성합니다.
     template = f"""Please provide an answer to the following question based on the conference materials and relevant information: \n\n{question}\n\nRelevant Information:\n{format_docs(docs_results)}\n\nWeb Search Results:\n{format_perplexity_results(perplexity_results)}"""
     llm_response = llm.query(template)
 
-    # 3. 필요한 모든 정보를 조합하여 최종 응답을 생성합니다.
+    # 필요한 모든 정보를 조합하여 최종 응답을 생성합니다.
     return {
         "answer": llm_response,
         "docs": docs_results,
         "perplexity_results": perplexity_results
     }
+
 
 # Main function definition
 def main():
