@@ -1,7 +1,7 @@
 import streamlit as st
 import pinecone
 from sentence_transformers import SentenceTransformer
-from perplexipy import Perplexity
+import perplexipy
 
 # Streamlit page config
 st.set_page_config(page_title="AI Chatbot", page_icon="🤖", layout="wide")
@@ -15,11 +15,10 @@ pinecone.init(api_key=pinecone_api_key, environment="aped-4627-b74a")
 index = pinecone.Index("conference")
 
 # Initialize SentenceTransformer for encoding
-# Note: This model outputs 384-dimensional embeddings, which we'll need to adjust
 model = SentenceTransformer('all-MiniLM-L6-v2')
 
 # Initialize Perplexity
-perplexity = Perplexity(api_key=perplexity_api_key)
+perplexity = perplexipy.Client(api_key=perplexity_api_key)
 
 def adjust_vector_dimension(vector, target_dim=1536):
     """Adjust vector dimension to match Pinecone index"""
@@ -40,8 +39,8 @@ def search_knowledge_base(query, top_k=5):
 
 def generate_response(query, context):
     prompt = f"Query: {query}\n\nContext:\n" + "\n".join(context)
-    response = perplexity.generate(prompt, max_tokens=150)
-    return response.text
+    response = perplexity.chat(messages=[{"role": "user", "content": prompt}])
+    return response.content
 
 def chatbot(query):
     context = search_knowledge_base(query)
@@ -66,7 +65,7 @@ if prompt := st.chat_input("What would you like to know?"):
     st.chat_message("user").markdown(prompt)
     # Add user message to chat history
     st.session_state.messages.append({"role": "user", "content": prompt})
-
+    
     with st.spinner("Thinking..."):
         response = chatbot(prompt)
     
@@ -82,7 +81,6 @@ with st.sidebar:
     st.write("This AI chatbot uses Pinecone for vector search and Perplexity for natural language processing.")
     st.write("It's connected to a knowledge base about various topics.")
     st.write("Feel free to ask any question!")
-
     if st.button("Clear Chat History"):
         st.session_state.messages = []
         st.experimental_rerun()
