@@ -134,6 +134,7 @@ def main():
     pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
     index_name = "conference"
     index = pc.Index(index_name)
+    embedding_handler = OpenAIEmbeddings(model="text-embedding-ada-002")
     vectorstore = ModifiedPineconeVectorStore(index=index, embedding=OpenAIEmbeddings(model="text-embedding-ada-002"), text_key="source")
     retriever = vectorstore.as_retriever(search_type='mmr', search_kwargs={"k": 10, "fetch_k": 20, "lambda_mult": 0.7})
 
@@ -141,7 +142,7 @@ def main():
     question = st.chat_input("Please ask a question about the conference:")
     if question:
         st.session_state.messages.append({"role": "user", "content": question})
-        handle_question(question, retriever, llm)
+        handle_question(question, retriever, llm, embedding_handler)
 
 def handle_question(question, retriever, llm):
     status_placeholder = st.empty()
@@ -163,7 +164,7 @@ def handle_question(question, retriever, llm):
 
         status_placeholder.text("Generating answer...")
         progress_bar.progress(80)
-        response = get_response(question, perplexity_results, retriever, llm)
+        response = get_response(question, perplexity_results, retriever, llm, embedding_handler)
         time.sleep(1)
 
         status_placeholder.text("Finalizing response...")
