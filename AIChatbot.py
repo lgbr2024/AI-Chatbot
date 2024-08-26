@@ -146,21 +146,25 @@ def get_perplexity_results(query: str, max_results: int = 5):
         st.error(f"예상치 못한 오류 발생: {str(e)}")
         return [{"content": f"예상치 못한 오류 발생: {str(e)}"}]
 
+# Define your formatting functions here if not defined elsewhere
+def format_docs(docs: List[Document]) -> str:
+    return "\n\n".join([f"Source: {doc.metadata.get('source', 'Unknown source')}\nContent: {doc.page_content}" for doc in docs])
+
+def format_perplexity_results(results: List[Dict[str, str]]) -> str:
+    return "\n\n".join([f"Perplexity Result: {result['content']}" for result in results])
+
 def main():
     st.title("Robot Conference Q&A System")
-    
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
-
-    pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
-    index_name = "conference"
-    index = pc.Index(index_name)
 
     if "gpt_model" not in st.session_state:
         st.session_state.gpt_model = "gpt-4o"
 
     st.session_state.gpt_model = st.selectbox("Select GPT model:", ("gpt-4o", "gpt-4o-mini"), index=("gpt-4o", "gpt-4o-mini").index(st.session_state.gpt_model))
     llm = ChatOpenAI(model=st.session_state.gpt_model)
+
+    pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
+    index_name = "conference"
+    index = pc.Index(index_name)
 
     vectorstore = ModifiedPineconeVectorStore(
         index=index,
@@ -171,6 +175,19 @@ def main():
     retriever = vectorstore.as_retriever(
         search_type='mmr',
         search_kwargs={"k": 10, "fetch_k": 20, "lambda_mult": 0.7}
+    )
+
+    # Define your template here if not defined elsewhere
+    template = """
+    [Template details go here]
+    """
+    
+    chain = (
+        RunnableParallel(question=RunnablePassthrough(), docs=retriever)
+        .assign(conference_context=format_docs)
+        .assign(web_search_results=format_perplexity_results)
+        .assign(answer=ChatPromptTemplate(template) | llm | StrOutputParser())
+        .pick(["answer", "docs", "perplexity_results"])
     )
 
     for message in st.session_state.messages:
@@ -206,7 +223,6 @@ def main():
             progress_bar.progress(100)
             time.sleep(0.5)
 
-            # 여기에서 response의 유효성을 검사합니다.
             if response is None or 'answer' not in response:
                 st.error("Failed to generate an answer.")
             else:
