@@ -1,7 +1,7 @@
 import streamlit as st
 import pinecone
 from sentence_transformers import SentenceTransformer
-import perplexipy
+from perplexipy import Perplexity
 
 # Streamlit page config
 st.set_page_config(page_title="AI Chatbot", page_icon="🤖", layout="wide")
@@ -18,7 +18,7 @@ index = pinecone.Index("conference")
 model = SentenceTransformer('all-MiniLM-L6-v2')
 
 # Initialize Perplexity
-perplexity = perplexipy.Client(api_key=perplexity_api_key)
+perplexity = Perplexity(api_key=perplexity_api_key)
 
 def adjust_vector_dimension(vector, target_dim=1536):
     """Adjust vector dimension to match Pinecone index"""
@@ -39,8 +39,8 @@ def search_knowledge_base(query, top_k=5):
 
 def generate_response(query, context):
     prompt = f"Query: {query}\n\nContext:\n" + "\n".join(context)
-    response = perplexity.chat(messages=[{"role": "user", "content": prompt}])
-    return response.content
+    response = perplexity.query(prompt)
+    return response
 
 def chatbot(query):
     context = search_knowledge_base(query)
