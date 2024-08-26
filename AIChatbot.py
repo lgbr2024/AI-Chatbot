@@ -85,6 +85,21 @@ def format_docs(docs: List[Document]) -> str:
 def format_perplexity_results(results: List[Dict[str, str]]) -> str:
     return "\n\n".join([f"Perplexity Result: {result['content']}" for result in results])
 
+def get_response(question, perplexity_results, retriever, llm):
+    # 1. 검색 결과 또는 문서 검색기를 사용하여 관련 문서나 데이터를 추출합니다.
+    docs_results = retriever.retrieve(question)
+
+    # 2. ChatOpenAI 모델을 사용하여 질문에 대한 답변을 생성합니다.
+    template = f"""Please provide an answer to the following question based on the conference materials and relevant information: \n\n{question}\n\nRelevant Information:\n{format_docs(docs_results)}\n\nWeb Search Results:\n{format_perplexity_results(perplexity_results)}"""
+    llm_response = llm.query(template)
+
+    # 3. 필요한 모든 정보를 조합하여 최종 응답을 생성합니다.
+    return {
+        "answer": llm_response,
+        "docs": docs_results,
+        "perplexity_results": perplexity_results
+    }
+
 # Main function definition
 def main():
     st.title("Robot Conference Q&A System")
