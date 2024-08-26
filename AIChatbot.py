@@ -32,7 +32,7 @@ class ModifiedPineconeVectorStore(PineconeVectorStore):
 
     def similarity_search_with_score_by_vector(
         self, embedding: List[float], k: int = 8, filter: Dict[str, Any] = None, namespace: str = None
-    ) -> List[Tuple[Document, float]]:
+    ):
         namespace = namespace or self._namespace
         results = self.index.query(
             vector=embedding,
@@ -56,7 +56,7 @@ class ModifiedPineconeVectorStore(PineconeVectorStore):
     def max_marginal_relevance_search_by_vector(
         self, embedding: List[float], k: int = 8, fetch_k: int = 30,
         lambda_mult: float = 0.7, filter: Dict[str, Any] = None, namespace: str = None
-    ) -> List[Document]:
+    ):
         namespace = namespace or self._namespace
         results = self.index.query(
             vector=embedding,
@@ -92,7 +92,7 @@ def maximal_marginal_relevance(
     embedding_list: List[np.ndarray],
     k: int = 4,
     lambda_mult: float = 0.5
-) -> List[int]:
+):
     similarity_scores = cosine_similarity([query_embedding], embedding_list)[0]
     selected_indices = []
     candidate_indices = list(range(len(embedding_list)))
@@ -111,7 +111,7 @@ def maximal_marginal_relevance(
         candidate_indices.remove(max_index)
     return selected_indices
 
-def get_perplexity_results(query: str, max_results: int = 5) -> List[Dict[str, str]]:
+def get_perplexity_results(query: str, max_results: int = 5):
     url = "https://api.perplexity.ai/chat/completions"
     payload = {
         "model": "llama-3.1-sonar-small-128k-online",
@@ -161,35 +161,6 @@ def main():
 
     st.session_state.gpt_model = st.selectbox("Select GPT model:", ("gpt-4o", "gpt-4o-mini"), index=("gpt-4o", "gpt-4o-mini").index(st.session_state.gpt_model))
     llm = ChatOpenAI(model=st.session_state.gpt_model)
-
-    # 프롬프트 템플릿 정의
-    prompt_template = """
-    Question: {question}
-    Conference Context: {conference_context}
-    Web Search Results: {web_search_results}
-    Answer:
-    """
-    prompt = ChatPromptTemplate.from_template(prompt_template)
-
-    # 문서 및 검색 결과 포맷팅 함수 정의
-    def format_docs(docs: List[Document]) -> str:
-        return "\n\n".join([f"Source: {doc.metadata.get('source', 'Unknown source')}\nContent: {doc.page_content}" for doc in docs])
-
-    def format_perplexity_results(results: List[Dict[str, str]]) -> str:
-        return "\n\n".join([f"Perplexity Result: {result['content']}" for result in results])
-
-    format_conference = itemgetter("docs") | RunnableLambda(format_docs)
-    format_web_search = itemgetter("perplexity_results") | RunnableLambda(format_perplexity_results)
-
-# Runnable 객체 연결하여 chain 정의
-chain = (
-    RunnableParallel(question=RunnablePassthrough(), docs=retriever)
-    .assign(conference_context=format_conference)
-    .assign(web_search_results=format_web_search)
-    .assign(answer=prompt | llm | StrOutputParser())
-    .pick(["answer", "docs", "perplexity_results"])
-)
-
 
     vectorstore = ModifiedPineconeVectorStore(
         index=index,
@@ -253,4 +224,3 @@ chain = (
 
 if __name__ == "__main__":
     main()
-
