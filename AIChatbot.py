@@ -47,5 +47,40 @@ def chatbot(query):
     response = generate_response(query, context)
     return response
 
-# Streamlit UI (나머지 UI 코드는 그대로 유지)
-# ...
+# Streamlit UI
+st.title("🤖 AI Chatbot")
+
+# Initialize chat history
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+# Display chat messages from history on app rerun
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+
+# React to user input
+if prompt := st.chat_input("What would you like to know?"):
+    # Display user message in chat message container
+    st.chat_message("user").markdown(prompt)
+    # Add user message to chat history
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    
+    with st.spinner("Thinking..."):
+        response = chatbot(prompt)
+    
+    # Display assistant response in chat message container
+    with st.chat_message("assistant"):
+        st.markdown(response)
+    # Add assistant response to chat history
+    st.session_state.messages.append({"role": "assistant", "content": response})
+
+# Sidebar for additional information or controls
+with st.sidebar:
+    st.subheader("About this Chatbot")
+    st.write("This AI chatbot uses Pinecone for vector search and Perplexity for natural language processing.")
+    st.write("It's connected to a knowledge base about various topics.")
+    st.write("Feel free to ask any question!")
+    if st.button("Clear Chat History"):
+        st.session_state.messages = []
+        st.experimental_rerun()
