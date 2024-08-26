@@ -162,6 +162,35 @@ def main():
     st.session_state.gpt_model = st.selectbox("Select GPT model:", ("gpt-4o", "gpt-4o-mini"), index=("gpt-4o", "gpt-4o-mini").index(st.session_state.gpt_model))
     llm = ChatOpenAI(model=st.session_state.gpt_model)
 
+    # 프롬프트 템플릿 정의
+    prompt_template = """
+    Question: {question}
+    Conference Context: {conference_context}
+    Web Search Results: {web_search_results}
+    Answer:
+    """
+    prompt = ChatPromptTemplate.from_template(prompt_template)
+
+    # 문서 및 검색 결과 포맷팅 함수 정의
+    def format_docs(docs: List[Document]) -> str:
+        return "\n\n".join([f"Source: {doc.metadata.get('source', 'Unknown source')}\nContent: {doc.page_content}" for doc in docs])
+
+    def format_perplexity_results(results: List[Dict[str, str]]) -> str:
+        return "\n\n".join([f"Perplexity Result: {result['content']}" for result in results])
+
+    format_conference = itemgetter("docs") | RunnableLambda(format_docs)
+    format_web_search = itemgetter("perplexity_results") | RunnableLambda(format_perplexity_results)
+
+# Runnable 객체 연결하여 chain 정의
+chain = (
+    RunnableParallel(question=RunnablePassthrough(), docs=retriever)
+    .assign(conference_context=format_conference)
+    .assign(web_search_results=format_web_search)
+    .assign(answer=prompt | llm | StrOutputParser())
+    .pick(["answer", "docs", "perplexity_results"])
+)
+
+
     vectorstore = ModifiedPineconeVectorStore(
         index=index,
         embedding=OpenAIEmbeddings(model="text-embedding-ada-002"),
