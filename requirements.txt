@@ -1,4 +1,9 @@
-streamlit==1.22.0
-pinecone-client==2.2.1
-sentence-transformers==2.2.2
-requests==2.28.2
+streamlit
+pinecone-client
+langchain
+langchain-openai
+langchain-pinecone
+openai
+numpy
+scikit-learn
+requests
