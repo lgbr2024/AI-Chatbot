@@ -11,7 +11,7 @@ pinecone_api_key = st.secrets["PINECONE_API_KEY"]
 perplexity_api_key = st.secrets["PERPLEXITY_API_KEY"]
 
 # Initialize Pinecone
-pinecone.init(api_key=pinecone_api_key, environment="your-environment")  # Replace with your actual environment
+pinecone.init(api_key=pinecone_api_key, environment="aped-4627-b74a")  # Replace with your actual environment
 index = pinecone.Index("conference")
 
 # Initialize SentenceTransformer for encoding
@@ -67,7 +67,8 @@ for message in st.session_state.messages:
         st.markdown(message["content"])
 
 # React to user input
-if prompt := st.chat_input("What would you like to know?"):
+prompt = st.chat_input("What would you like to know?")
+if prompt:
     # Display user message in chat message container
     st.chat_message("user").markdown(prompt)
     # Add user message to chat history
