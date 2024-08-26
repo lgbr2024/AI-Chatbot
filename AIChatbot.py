@@ -111,42 +111,44 @@ def maximal_marginal_relevance(
         candidate_indices.remove(max_index)
     return selected_indices
 
+import requests
+from typing import List, Dict
+import os
+import streamlit as st
+
 def get_perplexity_results(query: str, max_results: int = 5) -> List[Dict[str, str]]:
     url = "https://api.perplexity.ai/chat/completions"
     payload = {
-        "model": "pplx-7b-online",
+        "model": "llama-3.1-sonar-small-128k-online",
         "messages": [
             {
                 "role": "system",
-                "content": "You are a helpful assistant that provides information based on web searches."
+                "content": "You are a helpful assistant that provides concise summaries of web search results."
             },
             {
                 "role": "user",
-                "content": f"Provide a summary of web search results for: {query}"
+                "content": f"Provide a brief summary of web search results for: {query}"
             }
-        ],
-        "max_tokens": 1024
+        ]
     }
     headers = {
         "accept": "application/json",
         "content-type": "application/json",
-        "authorization": f"Bearer {os.getenv('PERPLEXITY_API_KEY')}"
+        "authorization": f"Bearer {st.secrets['PERPLEXITY_API_KEY']}"
     }
 
     try:
-        print(f"Sending request to Perplexity API: {url}")
-        print(f"Headers: {headers}")
-        print(f"Payload: {payload}")
         response = requests.post(url, json=payload, headers=headers)
-        response.raise_for_status()
+        response.raise_for_status()  # Raises a HTTPError if the status is 4xx, 5xx
         content = response.json()['choices'][0]['message']['content']
+        # Split the content into separate results if needed
         results = content.split('\n\n')[:max_results]
-        return [{"content": result} for result in results]
+        return [{"content": result.strip()} for result in results if result.strip()]
     except requests.exceptions.RequestException as e:
-        print(f"Perplexity API error response: {e.response.text if e.response else 'No response'}")
+        st.error(f"Perplexity API 요청 오류: {str(e)}")
         return [{"content": f"Perplexity 결과 가져오기 오류: {str(e)}"}]
     except Exception as e:
-        print(f"Unexpected error: {str(e)}")
+        st.error(f"예상치 못한 오류 발생: {str(e)}")
         return [{"content": f"예상치 못한 오류 발생: {str(e)}"}]
 
 def main():
@@ -247,7 +249,6 @@ def main():
     chain = (
         RunnableParallel(question=RunnablePassthrough(), docs=retriever)
         .assign(context=format)
-        .assign(perplexity_results=lambda x: get_perplexity_results(x["question"]))
         .assign(perplexity_formatted=format_perplexity)
         .assign(answer=answer)
         .pick(["answer", "docs", "perplexity_results"])
@@ -277,21 +278,17 @@ def main():
                 
                 status_placeholder.text("Fetching additional web search results...")
                 progress_bar.progress(60)
+                perplexity_results = get_perplexity_results(question)
                 time.sleep(1)
                 
                 status_placeholder.text("Generating answer...")
                 progress_bar.progress(80)
-                response = chain.invoke(question)
+                response = chain.invoke({"question": question, "perplexity_results": perplexity_results})
                 time.sleep(1)
                 
                 status_placeholder.text("Finalizing response...")
                 progress_bar.progress(100)
                 time.sleep(0.5)
-                
-                # Perplexity 결과 확인 및 오류 표시
-                for result in response['perplexity_results']:
-                    if "오류" in result['content']:
-                        st.error(result['content'])
                 
             except Exception as e:
                 st.error(f"오류 발생: {str(e)}")
