@@ -87,7 +87,7 @@ def format_perplexity_results(results: List[Dict[str, str]]) -> str:
 
 def get_response(question, perplexity_results, vectorstore, llm, embedding_handler):
     # 질문에 대한 임베딩 생성
-    question_embedding = embedding_handler.encode([question])[0].tolist()
+    question_embedding = embedding_handler.embed([question])[0].tolist()
 
     # VectorStore에서 MMR 검색 실행
     docs_results = vectorstore.max_marginal_relevance_search_by_vector(
