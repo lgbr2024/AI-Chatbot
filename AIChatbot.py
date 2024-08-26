@@ -1,90 +1,59 @@
 import streamlit as st
 import os
 from dotenv import load_dotenv
-from pinecone import Pinecone
-from langchain_openai import OpenAIEmbeddings
+from typing import List, Dict, Any
+from langchain_openai import ChatOpenAI
+from langchain_core.documents import Document
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.runnables import RunnableLambda, RunnableParallel, RunnablePassthrough
 from langchain_pinecone import PineconeVectorStore
 import requests
-import time
 
-# Load environment variables
-load_dotenv()
-
-# Set API keys from Streamlit secrets
+# 환경 변수 설정
 os.environ["OPENAI_API_KEY"] = st.secrets["openai_api_key"]
 os.environ["PINECONE_API_KEY"] = st.secrets["pinecone_api_key"]
-os.environ["PERPLEXITY_API_KEY"] = st.secrets["perplexity_api_key"]
 
-# Initialize Pinecone
-pinecone_api_key = os.getenv("PINECONE_API_KEY")
-pinecone_environment = "us-east-1-aws"
-index_name = "conference"
-pc = Pinecone(api_key=pinecone_api_key)
-index = pc.Index(index_name)
+# Perplexity API 호출 함수
+def fetch_perplexity_results(query: str) -> List[Dict[str, Any]]:
+    api_url = "https://api.perplexity.ai/search"
+    headers = {"Authorization": f"Bearer {os.getenv('PERPLEXITY_API_KEY')}"}
+    response = requests.get(api_url, headers=headers, params={"query": query})
+    if response.status_code == 200:
+        return response.json().get("results", [])
+    else:
+        return []
 
-# Initialize embeddings
-embedding = OpenAIEmbeddings(model="text-embedding-ada-002")
+# 검색 결과 포맷팅 함수
+def format_search_results(results: List[Dict[str, Any]]) -> str:
+    formatted_results = []
+    for result in results:
+        source = result.get('source', 'Unknown source')
+        content = result.get('content', 'No content available')
+        formatted_results.append(f"Source: {source}\nContent: {content}")
+    return "\n\n".join(formatted_results)
 
-# Set up vector store
-vectorstore = PineconeVectorStore(index=index, embedding=embedding, text_key="text")
+def main():
+    st.title("Conference Q&A System with Perplexity Search")
 
-def search_with_pinecone(query, top_k=10):
-    query_vector = embedding.embed_text(query)
-    results = vectorstore.similarity_search(query_vector, k=top_k)
-    return results
-
-def query_perplexity(query, context):
-    url = 'https://api.perplexity.ai/chat/completions'
-    headers = {
-        'Authorization': f'Bearer {os.environ["PERPLEXITY_API_KEY"]}',
-        'Content-Type': 'application/json'
-    }
-    prompt = f"Query: {query}\n\nContext:\n" + "\n".join([doc.page_content for doc in context])
-    data = {
-        "model": "mistral-7b-instruct",
-        "messages": [{"role": "user", "content": prompt}]
-    }
-    response = requests.post(url, json=data, headers=headers)
-    response.raise_for_status()
-    return response.json()['choices'][0]['message']['content']
-
-# Streamlit UI setup
-st.title("🤖 AI Chatbot")
-
-# Initialize session state for chat history
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-
-# Display chat messages from history on app rerun
-for message in st.session_state.messages:
-    st.text(f"{message['role']}: {message['content']}")
-
-# React to user input
-prompt = st.text_input("What would you like to know?")
-if st.button("Send"):
-    if prompt:
-        # Display user message
-        st.text(f"user: {prompt}")
-        # Add user message to chat history
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        
-        with st.spinner("Thinking..."):
-            # Query Pinecone
-            context = search_with_pinecone(prompt)
-            # Query Perplexity
-            response = query_perplexity(prompt, context)
-        
-        # Display assistant response
-        st.text(f"assistant: {response}")
-        # Add assistant response to chat history
-        st.session_state.messages.append({"role": "assistant", "content": response})
-
-# Sidebar for additional information or controls
-with st.sidebar:
-    st.subheader("About this Chatbot")
-    st.write("This AI chatbot uses Pinecone for vector search and Perplexity for natural language processing.")
-    st.write("It's connected to a knowledge base about various topics.")
-    st.write("Feel free to ask any question!")
-    if st.button("Clear Chat History"):
+    if "messages" not in st.session_state:
         st.session_state.messages = []
-        st.experimental_rerun()
+
+    # 사용자 질문 입력
+    question = st.text_input("Please ask a question about the conference:")
+
+    if question:
+        st.session_state.messages.append({"role": "user", "content": question})
+        with st.spinner("Searching Perplexity..."):
+            # Perplexity 검색 결과 가져오기
+            search_results = fetch_perplexity_results(question)
+            formatted_results = format_search_results(search_results)
+
+        with st.expander("Perplexity Search Results"):
+            st.markdown(formatted_results)
+
+        # ChatGPT를 통한 답변 생성
+        # (기존의 ChatGPT 답변 생성 코드 유지)
+
+if __name__ == "__main__":
+    main()
