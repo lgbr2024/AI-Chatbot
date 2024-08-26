@@ -14,10 +14,6 @@ from sklearn.metrics.pairwise import cosine_similarity
 import time
 import requests
 
-os.environ["OPENAI_API_KEY"] = st.secrets["openai_api_key"]
-os.environ["PINECONE_API_KEY"] = st.secrets["pinecone_api_key"]
-os.environ["PERPLEXITY_API_KEY"] = st.secrets["perplexity_api_key"]
-
 try:
     os.environ["OPENAI_API_KEY"] = st.secrets["openai_api_key"]
     os.environ["PINECONE_API_KEY"] = st.secrets["pinecone_api_key"]
@@ -25,7 +21,7 @@ try:
 except KeyError as e:
     st.error(f"필요한 API 키가 설정되지 않았습니다: {e}")
     st.stop()
-    
+
 class ModifiedPineconeVectorStore(PineconeVectorStore):
     def __init__(self, index, embedding, text_key: str = "text", namespace: str = ""):
         super().__init__(index, embedding, text_key, namespace)
@@ -139,50 +135,42 @@ def get_perplexity_results(query: str, max_results: int = 5) -> List[Dict[str, s
 
     try:
         response = requests.post(url, json=payload, headers=headers)
-        response.raise_for_status()  # HTTP 오류 발생 시 예외를 발생시킴
+        response.raise_for_status()
         content = response.json()['choices'][0]['message']['content']
         results = content.split('\n\n')[:max_results]
         return [{"content": result} for result in results]
     except requests.exceptions.RequestException as e:
-        st.error(f"Perplexity API 요청 오류: {e}")
         return [{"content": f"Perplexity 결과 가져오기 오류: {str(e)}"}]
     except Exception as e:
-        st.error(f"예상치 못한 오류 발생: {e}")
-        return [{"content": "Perplexity 결과 처리 중 오류 발생."}]
+        return [{"content": f"예상치 못한 오류 발생: {str(e)}"}]
 
 def main():
     st.title("Robot Conference Q&A System")
     
-    # Initialize session state for chat history
     if "messages" not in st.session_state:
         st.session_state.messages = []
     
-    # Initialize Pinecone
     pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
     index_name = "conference"
     index = pc.Index(index_name)
     
-    # Select GPT model
     if "gpt_model" not in st.session_state:
         st.session_state.gpt_model = "gpt-4o"
     
     st.session_state.gpt_model = st.selectbox("Select GPT model:", ("gpt-4o", "gpt-4o-mini"), index=("gpt-4o", "gpt-4o-mini").index(st.session_state.gpt_model))
     llm = ChatOpenAI(model=st.session_state.gpt_model)
     
-    # Set up Pinecone vector store
     vectorstore = ModifiedPineconeVectorStore(
         index=index,
         embedding=OpenAIEmbeddings(model="text-embedding-ada-002"),
         text_key="source"
     )
     
-    # Set up retriever
     retriever = vectorstore.as_retriever(
         search_type='mmr',
         search_kwargs={"k": 10, "fetch_k": 20, "lambda_mult": 0.7}
     )
     
-    # Set up prompt template and chain
     template = """
     <prompt>
     Question: {question} 
@@ -260,58 +248,54 @@ def main():
         .pick(["answer", "docs", "perplexity_results"])
     )
 
-    # Display chat history
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
     
-    # User input
     if question := st.chat_input("Please ask a question about the conference:"):
         st.session_state.messages.append({"role": "user", "content": question})
         with st.chat_message("user"):
             st.markdown(question)
         
         with st.chat_message("assistant"):
-            # Create placeholders for status updates
             status_placeholder = st.empty()
             progress_bar = st.progress(0)
             
             try:
-                # Step 1: Query Processing
                 status_placeholder.text("Processing query...")
                 progress_bar.progress(20)
-                time.sleep(1)  # Simulate processing time
+                time.sleep(1)
                 
-                # Step 2: Searching Database
                 status_placeholder.text("Searching database...")
                 progress_bar.progress(40)
-                time.sleep(1)  # Simulate search time
+                time.sleep(1)
                 
-                # Step 3: Fetching Perplexity Results
                 status_placeholder.text("Fetching additional web search results...")
                 progress_bar.progress(60)
-                time.sleep(1)  # Simulate Perplexity API call time
+                time.sleep(1)
                 
-                # Step 4: Generating Answer
                 status_placeholder.text("Generating answer...")
                 progress_bar.progress(80)
                 response = chain.invoke(question)
-                time.sleep(1)  # Simulate generation time
+                time.sleep(1)
                 
-                # Step 5: Finalizing Response
                 status_placeholder.text("Finalizing response...")
                 progress_bar.progress(100)
-                time.sleep(0.5)  # Short pause to show completion
+                time.sleep(0.5)
                 
+                # Perplexity 결과 확인 및 오류 표시
+                for result in response['perplexity_results']:
+                    if "오류" in result['content']:
+                        st.error(result['content'])
+                
+            except Exception as e:
+                st.error(f"오류 발생: {str(e)}")
             finally:
-                # Clear status displays
                 status_placeholder.empty()
                 progress_bar.empty()
             
-            # Display the answer
             st.markdown(response['answer'])
             
-            # Display sources
             with st.expander("Sources"):
                 st.write("Conference Sources:")
                 for doc in response['docs']:
@@ -321,7 +305,6 @@ def main():
                 for result in response['perplexity_results']:
                     st.write(f"- {result['content']}")
             
-            # Add assistant's response to chat history
             st.session_state.messages.append({"role": "assistant", "content": response['answer']})
 
 if __name__ == "__main__":
