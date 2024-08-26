@@ -134,7 +134,7 @@ def get_perplexity_results(query: str, max_results: int = 5) -> List[Dict[str, s
     headers = {
         "accept": "application/json",
         "content-type": "application/json",
-        "authorization": f"Bearer {st.secrets['PERPLEXITY_API_KEY']}"
+        "authorization": f"Bearer {st.secrets['perplexity_api_key']}"
     }
 
     try:
