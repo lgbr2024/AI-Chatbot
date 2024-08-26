@@ -101,10 +101,18 @@ def main():
     index_name = "conference"
     index = pc.Index(index_name)
 
-    vectorstore = ModifiedPineconeVectorStore(index=index, embedding=OpenAIEmbeddings(model="text-embedding-ada-002"), text_key="source")
-    retriever = vectorstore.as_retriever(search_type='mmr', search_kwargs={"k": 10, "fetch_k": 20, "lambda_mult": 0.7"})
+    vectorstore = ModifiedPineconeVectorStore(
+        index=index, 
+        embedding=OpenAIEmbeddings(model="text-embedding-ada-002"), 
+        text_key="source"
+    )
+    retriever = vectorstore.as_retriever(
+        search_type='mmr', 
+        search_kwargs={"k": 10, "fetch_k": 20, "lambda_mult": 0.7"}
+    )
 
     template = """[Insert template details here]"""
+    
     chain = (
         RunnableParallel(question=RunnablePassthrough(), docs=retriever)
         .assign(conference_context=format_docs)
