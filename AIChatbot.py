@@ -4,7 +4,7 @@ import time
 import numpy as np
 import requests
 from operator import itemgetter
-from typing import List, Tuple, Dict, Any
+from typing import List, Dict, Any
 from pinecone import Pinecone
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_core.documents import Document
@@ -23,7 +23,7 @@ except KeyError as e:
     st.error(f"필요한 API 키가 설정되지 않았습니다: {e}")
     st.stop()
 
-# Modified Pinecone Vector Store class
+# Define the Modified Pinecone Vector Store
 class ModifiedPineconeVectorStore(PineconeVectorStore):
     def __init__(self, index, embedding, text_key: str = "text", namespace: str = ""):
         super().__init__(index, embedding, text_key, namespace)
@@ -46,7 +46,7 @@ class ModifiedPineconeVectorStore(PineconeVectorStore):
         mmr_selected = maximal_marginal_relevance(np.array(embedding, dtype=np.float32), embeddings, k=min(k, len(results['matches'])), lambda_mult=lambda_mult)
         return [Document(page_content=results['matches'][i]['metadata'].get(self._text_key, ""), metadata={'source': results['matches'][i]['metadata'].get('source', '').replace('C:\\Users\\minje\\data2\\', '') if 'source' in results['matches'][i]['metadata'] else 'Unknown'}) for i in mmr_selected]
 
-# Function to calculate maximal marginal relevance
+# Define the maximal marginal relevance function
 def maximal_marginal_relevance(query_embedding: np.ndarray, embedding_list: List[np.ndarray], k: int = 4, lambda_mult: float = 0.5):
     similarity_scores = cosine_similarity([query_embedding], embedding_list)[0]
     selected_indices = []
@@ -60,7 +60,7 @@ def maximal_marginal_relevance(query_embedding: np.ndarray, embedding_list: List
         candidate_indices.remove(max_index)
     return selected_indices
 
-# Function to get perplexity results
+# Define the function to get perplexity results
 def get_perplexity_results(query: str, max_results: int = 5):
     url = "https://api.perplexity.ai/chat/completions"
     payload = {"model": "llama-3.1-sonar-small-128k-online", "messages": [{"role": "system", "content": "You are a helpful assistant that provides concise summaries of web search results."}, {"role": "user", "content": f"Provide a brief summary of web search results for: {query}"}]}
@@ -85,7 +85,7 @@ def format_docs(docs: List[Document]) -> str:
 def format_perplexity_results(results: List[Dict[str, str]]) -> str:
     return "\n\n".join([f"Perplexity Result: {result['content']}" for result in results])
 
-# Main function definition
+# Define the main function
 def main():
     st.title("Robot Conference Q&A System")
 
@@ -101,20 +101,11 @@ def main():
     index_name = "conference"
     index = pc.Index(index_name)
 
-    vectorstore = ModifiedPineconeVectorStore(
-        index=index,
-        embedding=OpenAIEmbeddings(model="text-embedding-ada-002"),
-        text_key="source"
-    )
-    retriever = vectorstore.as_retriever(
-        search_type='mmr',
-        search_kwargs={"k": 10, "fetch_k": 20, "lambda_mult": 0.7"}
-    )
+    vectorstore = ModifiedPineconeVectorStore(index=index, embedding=OpenAIEmbeddings(model="text-embedding-ada-002"), text_key="source")
+    retriever = vectorstore.as_retriever(search_type='mmr', search_kwargs={"k": 10, "fetch_k": 20, "lambda_mult": 0.7"})
 
     # Define the template and chain
-    template = """
-    [Template details go here]
-    """
+    template = """[Template details go here]"""
     chain = (
         RunnableParallel(question=RunnablePassthrough(), docs=retriever)
         .assign(conference_context=format_docs)
