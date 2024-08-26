@@ -173,81 +173,13 @@ def main():
         search_kwargs={"k": 10, "fetch_k": 20, "lambda_mult": 0.7}
     )
     
-    template = """
-    <prompt>
-    Question: {question} 
-    Conference Context: {conference_context} 
+    prompt_template = """
+    Question: {question}
+    Conference Context: {conference_context}
     Web Search Results: {web_search_results}
     Answer:
-
-    <context>
-    <role>Strategic consultant for LG Group, tasked with uncovering new trends and insights based on various conference trends and additional web search results.</role>
-    <audience>
-      -LG Group individual business executives
-      -LG Group representative
-    </audience>
-    <knowledge_base>Conference file saved in vector database and additional web search results from Perplexity</knowledge_base>
-    <goal>Find and provide organized content related to the conference that matches the questioner's inquiry, along with sources, to help derive project insights. Incorporate relevant information from web search results when appropriate.</goal>
-    </context>
-
-    <task>
-    <description>
-     Provide two separate answers: one based on the conference context, and another based on web search results. Each answer should cover industrial changes, issues, and response strategies related to the question. Explicitly reflect and incorporate the [research principles] throughout your analysis and recommendations.
-    </description>
-
-    <format>
-     [Conference Answer]
-      [Conference Overview]
-        - Explain the overall context of the conference related to the question
-        - Introduce the main points or topics
-                   
-      [Conference Contents]
-        - Analyze the key content discussed at the conference and reference.
-        - For each key session or topic:
-          - Gather the details as thoroughly as possible, then categorize them according to the following format: 
-            - Topic : 
-            - Fact : {{1. Provide a detailed description of approximately 5 sentences. 2. Include specific examples, data points, or case studies mentioned in the session. }}
-            - Your opinion : {{Provide a detailed description of approximately 3 sentences.}}
-            - Source : {{Show 2~3 data sources for each key topic}}
-          
-      [Conference Conclusion]
-        - Summarize new trends based on the conference content
-        - Present derived insights
-        - Suggest 2 follow-up questions that the LG Group representative might ask, and provide brief answers to each (2~3 sentences)
-
-     [Web Search Answer]
-      [Web Search Overview]
-        - Provide an overview of the web search results related to the question
-        - Highlight the main points or topics found in the web search
-
-      [Web Search Contents]
-        - Analyze the key information found in the web search results
-        - For each main point or topic:
-          - Topic:
-          - Key Findings: {{Provide a detailed description of approximately 3-4 sentences}}
-          - Relevance to LG: {{Explain how this information is relevant to LG Group in 2-3 sentences}}
-          - Source: {{Indicate the Perplexity search result this information came from}}
-
-      [Web Search Conclusion]
-        - Summarize the main insights from the web search results
-        - Compare and contrast with the conference information if applicable
-        - Suggest 1 follow-up question based on the web search results, and provide a brief answer (2-3 sentences)
-    </format>
-
-    <style>Business writing with clear and concise sentences targeted at executives</style>
-
-    <constraints>
-        - USE THE PROVIDED CONFERENCE CONTEXT AND WEB SEARCH RESULTS TO ANSWER THE QUESTION
-        - IF YOU DON'T KNOW THE ANSWER, ADMIT IT HONESTLY
-        - ANSWER IN KOREAN AND PROVIDE RICH SENTENCES TO ENHANCE THE QUALITY OF THE ANSWER
-        - ADHERE TO THE LENGTH CONSTRAINTS FOR EACH SECTION
-        - SEPARATE YOUR ANSWER INTO TWO MAIN PARTS: [Conference Answer] AND [Web Search Answer], EACH WITH THEIR OWN SUBSECTIONS AS SPECIFIED IN THE FORMAT
-        - USE THE EXACT SECTION HEADERS PROVIDED
-    </constraints>
-    </task>
-    </prompt>
     """
-    prompt = ChatPromptTemplate.from_template(template)
+    prompt = ChatPromptTemplate.from_template(prompt_template)
 
     def format_docs(docs: List[Document]) -> str:
         formatted = []
