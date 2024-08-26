@@ -144,7 +144,7 @@ def main():
         st.session_state.messages.append({"role": "user", "content": question})
         handle_question(question, retriever, llm, embedding_handler)
 
-def handle_question(question, retriever, llm):
+def handle_question(question, retriever, llm, embedding_handler):
     status_placeholder = st.empty()
     progress_bar = st.progress(0)
 
