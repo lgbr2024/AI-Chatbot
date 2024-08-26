@@ -1,6 +1,4 @@
 streamlit
 pinecone-client
 sentence-transformers
-git+https://github.com/nathanrchn/perplexityai.git
-setuptools  # 빌드 의존성
-wheel       # 빌드 의존성
+git+https://github.com/nathanrchn/perplexityai.git#egg=perplexity
