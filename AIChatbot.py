@@ -1,7 +1,7 @@
 import streamlit as st
 import pinecone
 from sentence_transformers import SentenceTransformer
-from perplexipy import Perplexity
+import requests
 
 # Streamlit page config
 st.set_page_config(page_title="AI Chatbot", page_icon="🤖", layout="wide")
@@ -39,8 +39,19 @@ def search_knowledge_base(query, top_k=5):
 
 def generate_response(query, context):
     prompt = f"Query: {query}\n\nContext:\n" + "\n".join(context)
-    response = perplexity.query(prompt)
-    return response
+    headers = {
+        "Authorization": f"Bearer {perplexity_api_key}",
+        "Content-Type": "application/json"
+    }
+    data = {
+        "model": "mistral-7b-instruct",
+        "messages": [{"role": "user", "content": prompt}]
+    }
+    response = requests.post("https://api.perplexity.ai/chat/completions", json=data, headers=headers)
+    if response.status_code == 200:
+        return response.json()['choices'][0]['message']['content']
+    else:
+        return f"Error: {response.status_code}, {response.text}"
 
 def chatbot(query):
     context = search_knowledge_base(query)
