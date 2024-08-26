@@ -1,7 +1,7 @@
 import streamlit as st
 import pinecone
 from sentence_transformers import SentenceTransformer
-from perplexity import Perplexity
+from perplexipy import Perplexity
 
 # Streamlit page config
 st.set_page_config(page_title="AI Chatbot", page_icon="🤖", layout="wide")
