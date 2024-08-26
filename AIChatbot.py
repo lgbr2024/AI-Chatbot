@@ -151,124 +151,77 @@ def main():
     
     if "messages" not in st.session_state:
         st.session_state.messages = []
-    
+
     pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
     index_name = "conference"
     index = pc.Index(index_name)
-    
+
     if "gpt_model" not in st.session_state:
         st.session_state.gpt_model = "gpt-4o"
-    
+
     st.session_state.gpt_model = st.selectbox("Select GPT model:", ("gpt-4o", "gpt-4o-mini"), index=("gpt-4o", "gpt-4o-mini").index(st.session_state.gpt_model))
     llm = ChatOpenAI(model=st.session_state.gpt_model)
-    
+
     vectorstore = ModifiedPineconeVectorStore(
         index=index,
         embedding=OpenAIEmbeddings(model="text-embedding-ada-002"),
         text_key="source"
     )
-    
+
     retriever = vectorstore.as_retriever(
         search_type='mmr',
         search_kwargs={"k": 10, "fetch_k": 20, "lambda_mult": 0.7}
-    )
-    
-    prompt_template = """
-    Question: {question}
-    Conference Context: {conference_context}
-    Web Search Results: {web_search_results}
-    Answer:
-    """
-    prompt = ChatPromptTemplate.from_template(prompt_template)
-
-    def format_docs(docs: List[Document]) -> str:
-        formatted = []
-        for doc in docs:
-            source = doc.metadata.get('source', 'Unknown source')
-            formatted.append(f"Source: {source}\nContent: {doc.page_content}")
-        return "\n\n".join(formatted)
-
-    def format_perplexity_results(results: List[Dict[str, str]]) -> str:
-        return "\n\n".join([f"Perplexity Result: {result['content']}" for result in results])
-
-    format_conference = itemgetter("docs") | RunnableLambda(format_docs)
-    format_web_search = itemgetter("perplexity_results") | RunnableLambda(format_perplexity_results)
-    answer = prompt | llm | StrOutputParser()
-    chain = (
-        RunnableParallel(question=RunnablePassthrough(), docs=retriever)
-        .assign(conference_context=format_conference)
-        .assign(web_search_results=format_web_search)
-        .assign(answer=answer)
-        .pick(["answer", "docs", "perplexity_results"])
     )
 
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    if question := st.chat_input("Please ask a question about the conference:"):
+    question = st.chat_input("Please ask a question about the conference:")
+    if question:
         st.session_state.messages.append({"role": "user", "content": question})
-        with st.chat_message("user"):
-            st.markdown(question)
-        
-        with st.chat_message("assistant"):
-            status_placeholder = st.empty()
-            progress_bar = st.progress(0)
-            
-            try:
-                status_placeholder.text("Processing query...")
-                progress_bar.progress(20)
-                time.sleep(1)
-                
-                status_placeholder.text("Searching database...")
-                progress_bar.progress(40)
-                time.sleep(1)
-                
-                status_placeholder.text("Fetching additional web search results...")
-                progress_bar.progress(60)
-                perplexity_results = get_perplexity_results(question)
-                time.sleep(1)
-                
-                status_placeholder.text("Generating answer...")
-                progress_bar.progress(80)
-                response = chain.invoke({"question": question, "perplexity_results": perplexity_results})
-                time.sleep(1)
-                
-                status_placeholder.text("Finalizing response...")
-                progress_bar.progress(100)
-                time.sleep(0.5)
-                
-                if isinstance(response, dict) and 'answer' in response:
-                    answer_content = response['answer']
-                    if isinstance(answer_content, str):
-                        # 답변을 Conference Answer와 Web Search Answer로 분리
-                        main_sections = answer_content.split('[Conference Answer]')[1].split('[Web Search Answer]')
-                        conference_answer = main_sections[0].strip()
-                        web_search_answer = main_sections[1].strip() if len(main_sections) > 1 else "Web search answer not provided."
+        status_placeholder = st.empty()
+        progress_bar = st.progress(0)
 
-                        # Conference Answer 표시
-                        with st.expander("[Conference Answer]"):
-                            sections = conference_answer.split('[')
-                            for section in sections[1:]:
-                                section_title = '[' + section.split(']')[0] + ']'
-                                section_content = ']'.join(section.split(']')[1:]).strip()
-                                st.subheader(section_title)
-                                st.markdown(section_content)
+        try:
+            status_placeholder.text("Processing query...")
+            progress_bar.progress(20)
+            time.sleep(1)
 
-                        # Web Search Answer 표시
-                        with st.expander("[Web Search Answer]"):
-                            sections = web_search_answer.split('[')
-                            for section in sections[1:]:
-                                section_title = '[' + section.split(']')[0] + ']'
-                                section_content = ']'.join(section.split(']')[1:]).strip()
-                                st.subheader(section_title)
-                                st.markdown(section_content)
-                                
-            except Exception as e:
-                st.error(f"오류 발생: {str(e)}")
-            finally:
-                status_placeholder.empty()
-                progress_bar.empty()
+            status_placeholder.text("Searching database...")
+            progress_bar.progress(40)
+            time.sleep(1)
+
+            status_placeholder.text("Fetching additional web search results...")
+            progress_bar.progress(60)
+            perplexity_results = get_perplexity_results(question)
+            time.sleep(1)
+
+            status_placeholder.text("Generating answer...")
+            progress_bar.progress(80)
+            response = chain.invoke({"question": question, "perplexity_results": perplexity_results})
+            time.sleep(1)
+
+            status_placeholder.text("Finalizing response...")
+            progress_bar.progress(100)
+            time.sleep(0.5)
+
+            # 여기에서 response의 유효성을 검사합니다.
+            if response is None or 'answer' not in response:
+                st.error("Failed to generate an answer.")
+            else:
+                answer_content = response['answer']
+                if isinstance(answer_content, str):
+                    st.markdown(answer_content)
+                else:
+                    st.error("Received an invalid response format.")
+
+        except Exception as e:
+            st.error(f"An error occurred: {str(e)}")
+        finally:
+            status_placeholder.empty()
+            progress_bar.empty()
 
 if __name__ == "__main__":
     main()
+
