@@ -32,7 +32,7 @@ http.mount("http://", adapter)
 for attempt in range(3):
     try:
         pinecone.init(api_key=pinecone_api_key, environment=pinecone_environment)
-        index = pinecone.Index(pinecone_index_name, host=pinecone_host)
+        index = pinecone.Index(pinecone_index_name)
         break
     except Exception as e:
         if attempt == 2:
