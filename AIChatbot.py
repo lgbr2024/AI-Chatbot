@@ -12,7 +12,7 @@ st.set_page_config(page_title="AI Chatbot", page_icon="🤖", layout="wide")
 # Access secrets
 pinecone_api_key = st.secrets["PINECONE_API_KEY"]
 perplexity_api_key = st.secrets["PERPLEXITY_API_KEY"]
-pinecone_environment = "us-east-1"
+pinecone_environment = "us-east-1-aws"
 pinecone_index_name = "conference"
 
 # Configure retry strategy
