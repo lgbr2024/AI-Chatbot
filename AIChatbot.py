@@ -1,102 +1,57 @@
 import streamlit as st
-import pinecone
-from sentence_transformers import SentenceTransformer
+import os
+from dotenv import load_dotenv
+from pinecone import Pinecone
+from langchain_openai import OpenAIEmbeddings
+from langchain_pinecone import PineconeVectorStore
 import requests
-from requests.adapters import HTTPAdapter
-from requests.packages.urllib3.util.retry import Retry
 import time
 
-# Streamlit page config
-st.set_page_config(page_title="AI Chatbot", page_icon="🤖", layout="wide")
+# Load environment variables
+load_dotenv()
 
-# Access secrets
-pinecone_api_key = st.secrets["PINECONE_API_KEY"]
-perplexity_api_key = st.secrets["PERPLEXITY_API_KEY"]
-pinecone_environment = "us-east-1-aws"
-pinecone_index_name = "conference"
-
-# Configure retry strategy
-retry_strategy = Retry(
-    total=3,
-    status_forcelist=[429, 500, 502, 503, 504],
-    allowed_methods=["HEAD", "GET", "OPTIONS", "POST"],
-    backoff_factor=1
-)
-adapter = HTTPAdapter(max_retries=retry_strategy)
-http = requests.Session()
-http.mount("https://", adapter)
-http.mount("http://", adapter)
+# Set API keys from Streamlit secrets
+os.environ["OPENAI_API_KEY"] = st.secrets["openai_api_key"]
+os.environ["PINECONE_API_KEY"] = st.secrets["pinecone_api_key"]
+os.environ["PERPLEXITY_API_KEY"] = st.secrets["perplexity_api_key"]
 
 # Initialize Pinecone
-for attempt in range(3):
-    try:
-        pinecone.init(api_key=pinecone_api_key, environment=pinecone_environment)
-        index = pinecone.Index(pinecone_index_name)
-        break
-    except Exception as e:
-        if attempt == 2:
-            st.error(f"Failed to initialize Pinecone after 3 attempts: {str(e)}")
-            st.stop()
-        time.sleep(2 ** attempt)  # Exponential backoff
+pinecone_api_key = os.getenv("PINECONE_API_KEY")
+pinecone_environment = "us-east-1-aws"
+index_name = "conference"
+pc = Pinecone(api_key=pinecone_api_key)
+index = pc.Index(index_name)
 
-# Initialize SentenceTransformer for encoding
-model = SentenceTransformer('all-MiniLM-L6-v2')
+# Initialize embeddings
+embedding = OpenAIEmbeddings(model="text-embedding-ada-002")
 
-def adjust_vector_dimension(vector, target_dim=1536):
-    """Adjust vector dimension to match Pinecone index"""
-    current_dim = len(vector)
-    if current_dim < target_dim:
-        return vector + [0] * (target_dim - current_dim)
-    elif current_dim > target_dim:
-        return vector[:target_dim]
-    return vector
+# Set up vector store
+vectorstore = PineconeVectorStore(index=index, embedding=embedding, text_key="text")
 
-def search_vectors(query, top_k=10):
-    for attempt in range(3):
-        try:
-            query_vector = model.encode(query).tolist()
-            adjusted_vector = adjust_vector_dimension(query_vector)
-            results = index.query(vector=adjusted_vector, top_k=top_k, include_metadata=True)
-            return [{"text": match['metadata'].get('text', 'No text available'), 
-                     "page": match['metadata'].get('page', 'Unknown')} 
-                    for match in results['matches']]
-        except Exception as e:
-            if attempt == 2:
-                st.error(f"Error during vector search after 3 attempts: {str(e)}")
-                return []
-            time.sleep(2 ** attempt)  # Exponential backoff
+def search_with_pinecone(query, top_k=10):
+    query_vector = embedding.embed_text(query)
+    results = vectorstore.similarity_search(query_vector, k=top_k)
+    return results
 
-def send_query_to_perplexity(query, context):
-    for attempt in range(3):
-        try:
-            url = 'https://api.perplexity.ai/chat/completions'
-            headers = {
-                'Authorization': f'Bearer {perplexity_api_key}',
-                'Content-Type': 'application/json'
-            }
-            prompt = f"Query: {query}\n\nContext:\n" + "\n".join([item['text'] for item in context])
-            data = {
-                "model": "mistral-7b-instruct",
-                "messages": [{"role": "user", "content": prompt}]
-            }
-            response = http.post(url, json=data, headers=headers)
-            response.raise_for_status()
-            return response.json()['choices'][0]['message']['content']
-        except Exception as e:
-            if attempt == 2:
-                st.error(f"Error querying Perplexity API after 3 attempts: {str(e)}")
-                return "Sorry, I couldn't generate a response at this time."
-            time.sleep(2 ** attempt)  # Exponential backoff
+def query_perplexity(query, context):
+    url = 'https://api.perplexity.ai/chat/completions'
+    headers = {
+        'Authorization': f'Bearer {os.environ["PERPLEXITY_API_KEY"]}',
+        'Content-Type': 'application/json'
+    }
+    prompt = f"Query: {query}\n\nContext:\n" + "\n".join([doc.page_content for doc in context])
+    data = {
+        "model": "mistral-7b-instruct",
+        "messages": [{"role": "user", "content": prompt}]
+    }
+    response = requests.post(url, json=data, headers=headers)
+    response.raise_for_status()
+    return response.json()['choices'][0]['message']['content']
 
-def chatbot(query):
-    context = search_vectors(query)
-    response = send_query_to_perplexity(query, context)
-    return response
-
-# Streamlit UI
+# Streamlit UI setup
 st.title("🤖 AI Chatbot")
 
-# Initialize chat history
+# Initialize session state for chat history
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
@@ -114,7 +69,10 @@ if st.button("Send"):
         st.session_state.messages.append({"role": "user", "content": prompt})
         
         with st.spinner("Thinking..."):
-            response = chatbot(prompt)
+            # Query Pinecone
+            context = search_with_pinecone(prompt)
+            # Query Perplexity
+            response = query_perplexity(prompt, context)
         
         # Display assistant response
         st.text(f"assistant: {response}")
@@ -130,8 +88,3 @@ with st.sidebar:
     if st.button("Clear Chat History"):
         st.session_state.messages = []
         st.experimental_rerun()
-
-if __name__ == '__main__':
-    # The Streamlit app is already defined in the code above,
-    # so we don't need an explicit main() function call here.
-    pass
