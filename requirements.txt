@@ -1,4 +1,6 @@
 streamlit
 pinecone-client
 sentence-transformers
-git+https://github.com/nathanrchn/perplexityai.git#egg=perplexity
+perplexipy
+
+
