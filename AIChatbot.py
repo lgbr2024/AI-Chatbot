@@ -12,9 +12,8 @@ st.set_page_config(page_title="AI Chatbot", page_icon="🤖", layout="wide")
 # Access secrets
 pinecone_api_key = st.secrets["PINECONE_API_KEY"]
 perplexity_api_key = st.secrets["PERPLEXITY_API_KEY"]
-pinecone_environment = st.secrets["PINECONE_ENVIRONMENT"]
-pinecone_index_name = st.secrets["PINECONE_INDEX_NAME"]
-pinecone_host = st.secrets["PINECONE_HOST"]
+pinecone_environment = "us-east-1-aws"
+pinecone_index_name = "conference"
 
 # Configure retry strategy
 retry_strategy = Retry(
@@ -58,7 +57,9 @@ def search_vectors(query, top_k=10):
             query_vector = model.encode(query).tolist()
             adjusted_vector = adjust_vector_dimension(query_vector)
             results = index.query(vector=adjusted_vector, top_k=top_k, include_metadata=True)
-            return [match['metadata'].get('text', 'No text available') for match in results['matches']]
+            return [{"text": match['metadata'].get('text', 'No text available'), 
+                     "page": match['metadata'].get('page', 'Unknown')} 
+                    for match in results['matches']]
         except Exception as e:
             if attempt == 2:
                 st.error(f"Error during vector search after 3 attempts: {str(e)}")
@@ -73,7 +74,7 @@ def send_query_to_perplexity(query, context):
                 'Authorization': f'Bearer {perplexity_api_key}',
                 'Content-Type': 'application/json'
             }
-            prompt = f"Query: {query}\n\nContext:\n" + "\n".join(context)
+            prompt = f"Query: {query}\n\nContext:\n" + "\n".join([item['text'] for item in context])
             data = {
                 "model": "mistral-7b-instruct",
                 "messages": [{"role": "user", "content": prompt}]
