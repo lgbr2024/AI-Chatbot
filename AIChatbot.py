@@ -149,27 +149,27 @@ def main():
     report_template = """
     Human: Please write a comprehensive and informative report based on the following question and context. 
     The report should be approximately 4000 words in total, following this structure:
-
+    
     1. Conference Overview (about 1000 words)
        - Explain the overall context of the conference
        - List the main topics, providing a brief 1-2 sentence explanation for each
        - Mention speakers or company names where possible
        - Mention the scale of the conference (number of attendees, number of presentation sessions, etc.) and its importance
        - Summarize in 1-2 sentences the impact or significance of this conference on the industry
-
+    
     2. Analysis of Key Content (about 2000 words)
        - Analyze the key content discussed at the conference and reference sources
        - For each key session or topic:
          Topic:
-         Fact: {{1. Provide a detailed description of approximately 5 sentences. 2. Include specific examples, numerical data, or case studies mentioned in the session}}
-         Your opinion: {{Provide a detailed description of approximately 3 sentences}}
-         Source: {{Show 2~3 data sources for each key topic}}
-
+         Fact: {1. Provide a detailed description of approximately 5 sentences. 2. Include specific examples, numerical data, or case studies mentioned in the session}
+         Your opinion: {Provide a detailed description of approximately 3 sentences}
+         Source: {Show 2~3 data sources for each key topic}
+    
     3. Conclusion and Insights (about 1000 words)
        - Summarize new trends based on the conference content
        - Present derived insights from the conference that relate to the user's question. Focus on forward-looking perspectives and industry developments
        - Suggest 3 follow-up questions that the LG Group representative might ask, and provide brief answers to each (3~4 sentences)
-
+    
     WRITING GUIDELINES:
     - USE THE PROVIDED CONTEXT TO ANSWER THE QUESTION
     - IF YOU DON'T KNOW THE ANSWER, ADMIT IT HONESTLY
@@ -179,25 +179,19 @@ def main():
     - EMPLOY A PROFESSIONAL TONE WHILE MAINTAINING READABILITY
     - USE RELEVANT BUSINESS TERMINOLOGY AND CONCEPTS WHERE APPROPRIATE
     - INCLUDE DATA-DRIVEN INSIGHTS AND ACTIONABLE RECOMMENDATIONS
-
-    Question: {{question}}
-    Context: {{context}}
-
-    Assistant: 네, 주어진 지침에 따라 Harvard Business Review 스타일로 종합적이고 정보가 풍부한 보고서를 한국어로 작성하겠습니다.
-
-    Human: 이제 위의 지침에 따라 약 4000단어 분량의 보고서를 작성해 주세요.
-
-    Assistant: [보고서 내용]
+    
+    Question: {question}
+    Context: {context}
     """
     report_prompt = ChatPromptTemplate.from_template(report_template)
 
     chatbot_template = """
-    Human: 다음 질문에 대해 주어진 컨텍스트를 바탕으로 약 1,000자로 대화체로 답변해 주세요. 한국어로 답변해 주세요.
+    Human: 다음 질문에 대해 주어진 컨텍스트를 바탕으로 약 3,000자로 대화체로 답변해 주세요. 한국어로 답변해 주세요.
 
-    Question: {{question}}
-    Context: {{context}}
+    Question: {question}
+    Context: {context}
 
-    Assistant: 네, 주어진 질문에 대해 컨텍스트를 바탕으로 약 1,000자 분량의 대화체 답변을 한국어로 작성하겠습니다.
+    Assistant: 네, 주어진 질문에 대해 컨텍스트를 바탕으로 약 3,000자 분량의 대화체 답변을 한국어로 작성하겠습니다.
 
     [챗봇 응답 내용]
     """
