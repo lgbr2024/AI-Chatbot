@@ -1,10 +1,11 @@
 import streamlit as st
 import os
+from dotenv import load_dotenv
 from operator import itemgetter
 from typing import List, Tuple, Dict, Any
 from pinecone import Pinecone
 from langchain_anthropic import ChatAnthropic
-from langchain_openai import OpenAIEmbeddings  # OpenAI 임베딩은 그대로 사용
+from langchain_openai import OpenAIEmbeddings
 from langchain_core.documents import Document
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
@@ -14,12 +15,100 @@ import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 import time
 
-# API 키 설정 (Streamlit secrets에서 가져옴)
+# API 키 설정
 os.environ["ANTHROPIC_API_KEY"] = st.secrets["anthropic_api_key"]
 os.environ["OPENAI_API_KEY"] = st.secrets["openai_api_key"]
 os.environ["PINECONE_API_KEY"] = st.secrets["pinecone_api_key"]
 
-# ModifiedPineconeVectorStore 클래스는 그대로 유지
+# ModifiedPineconeVectorStore 클래스 정의
+class ModifiedPineconeVectorStore(PineconeVectorStore):
+    def __init__(self, index, embedding, text_key: str = "text", namespace: str = ""):
+        super().__init__(index, embedding, text_key, namespace)
+        self.index = index
+        self._embedding = embedding
+        self._text_key = text_key
+        self._namespace = namespace
+
+    def similarity_search_with_score_by_vector(
+        self, embedding: List[float], k: int = 8, filter: Dict[str, Any] = None, namespace: str = None
+    ) -> List[Tuple[Document, float]]:
+        namespace = namespace or self._namespace
+        results = self.index.query(
+            vector=embedding,
+            top_k=k,
+            include_metadata=True,
+            include_values=True,
+            filter=filter,
+            namespace=namespace,
+        )
+        return [
+            (
+                Document(
+                    page_content=result["metadata"].get(self._text_key, ""),
+                    metadata={k: v for k, v in result["metadata"].items() if k != self._text_key}
+                ),
+                result["score"],
+            )
+            for result in results["matches"]
+        ]
+
+    def max_marginal_relevance_search_by_vector(
+        self, embedding: List[float], k: int = 8, fetch_k: int = 30,
+        lambda_mult: float = 0.7, filter: Dict[str, Any] = None, namespace: str = None
+    ) -> List[Document]:
+        namespace = namespace or self._namespace
+        results = self.index.query(
+            vector=embedding,
+            top_k=fetch_k,
+            include_metadata=True,
+            include_values=True,
+            filter=filter,
+            namespace=namespace,
+        )
+        if not results['matches']:
+            return []
+
+        embeddings = [match['values'] for match in results['matches']]
+        mmr_selected = maximal_marginal_relevance(
+            np.array(embedding, dtype=np.float32),
+            embeddings,
+            k=min(k, len(results['matches'])),
+            lambda_mult=lambda_mult
+        )
+
+        return [
+            Document(
+                page_content=results['matches'][i]['metadata'].get(self._text_key, ""),
+                metadata={
+                    'source': results['matches'][i]['metadata'].get('source', '').replace('C:\\Users\\minje\\data\\', '') if 'source' in results['matches'][i]['metadata'] else 'Unknown'
+                }
+            )
+            for i in mmr_selected
+        ]
+
+def maximal_marginal_relevance(
+    query_embedding: np.ndarray,
+    embedding_list: List[np.ndarray],
+    k: int = 4,
+    lambda_mult: float = 0.5
+) -> List[int]:
+    similarity_scores = cosine_similarity([query_embedding], embedding_list)[0]
+    selected_indices = []
+    candidate_indices = list(range(len(embedding_list)))
+    for _ in range(k):
+        if not candidate_indices:
+            break
+
+        mmr_scores = [
+            lambda_mult * similarity_scores[i] - (1 - lambda_mult) * max(
+                [cosine_similarity([embedding_list[i]], [embedding_list[s]])[0][0] for s in selected_indices] or [0]
+            )
+            for i in candidate_indices
+        ]
+        max_index = candidate_indices[np.argmax(mmr_scores)]
+        selected_indices.append(max_index)
+        candidate_indices.remove(max_index)
+    return selected_indices
 
 def main():
     st.title("🤞Conference Q&A System")
@@ -59,7 +148,7 @@ def main():
         search_kwargs={"k": 10, "fetch_k": 20, "lambda_mult": 0.7}
     )
 
-    # 리포트 모드용 프롬프트 템플릿 설정
+    # 프롬프트 템플릿 설정 (리포트 모드와 챗봇 모드)
     report_template = """
     Human: Please provide a comprehensive report based on the following question and context. Use the style of Harvard Business Review (HBR) and follow these guidelines:
 
@@ -91,7 +180,6 @@ def main():
     """
     report_prompt = ChatPromptTemplate.from_template(report_template)
 
-    # 챗봇 모드용 프롬프트 템플릿 설정
     chatbot_template = """
     Human: 다음 질문에 대해 주어진 컨텍스트를 바탕으로 약 4,000자로 대화체로 답변해 주세요. 한국어로 답변해 주세요.
 
@@ -104,7 +192,14 @@ def main():
     """
     chatbot_prompt = ChatPromptTemplate.from_template(chatbot_template)
 
-    # format_docs 함수는 그대로 유지
+    def format_docs(docs: List[Document]) -> str:
+        formatted = []
+        for doc in docs:
+            source = doc.metadata.get('source', 'Unknown source')
+            formatted.append(f"Source: {source}")
+        return "\n\n" + "\n\n".join(formatted)
+
+    format = itemgetter("docs") | RunnableLambda(format_docs)
 
     def get_report_chain(prompt):
         answer = prompt | llm | StrOutputParser()
@@ -127,29 +222,74 @@ def main():
     report_chain = get_report_chain(report_prompt)
     chatbot_chain = get_chatbot_chain(chatbot_prompt)
 
-    # 모드 선택 및 대화 기록 표시 부분은 그대로 유지
+    # 모드 선택
+    new_mode = st.radio("모드 선택:", ("Report Mode", "Chatbot Mode"), key="mode_selection")
+    if new_mode != st.session_state.mode:
+        st.session_state.mode = new_mode
+        st.session_state.messages = []  # 모드 변경 시 대화 기록 초기화
+        st.rerun()
 
-    # 사용자 입력 및 응답 생성 부분
+    # 현재 모드 표시
+    st.write(f"현재 모드: {st.session_state.mode}")
+
+    # 대화 초기화 함수
+    def reset_conversation():
+        st.session_state.messages = []
+        st.rerun()
+
+    # 리셋 키워드 확인
+    reset_keywords = ["처음으로", "초기화", "다시", "안녕"]
+
+    # 대화 기록 표시
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+
+    # 사용자 입력
     if question := st.chat_input("컨퍼런스에 대해 질문해 주세요:"):
-        # 리셋 키워드 확인 및 대화 초기화 로직은 그대로 유지
+        # 리셋 키워드 확인
+        if any(keyword in question for keyword in reset_keywords):
+            reset_conversation()
+        else:
+            st.session_state.messages.append({"role": "user", "content": question})
+            with st.chat_message("user"):
+                st.markdown(question)
 
-        st.session_state.messages.append({"role": "user", "content": question})
-        with st.chat_message("user"):
-            st.markdown(question)
+            with st.chat_message("assistant"):
+                # 상태 업데이트를 위한 플레이스홀더 생성
+                status_placeholder = st.empty()
+                progress_bar = st.progress(0)
 
-        with st.chat_message("assistant"):
-            # 상태 업데이트를 위한 플레이스홀더 생성
-            status_placeholder = st.empty()
-            progress_bar = st.progress(0)
+                try:
+                    # 쿼리 처리
+                    status_placeholder.text("쿼리 처리 중...")
+                    progress_bar.progress(25)
+                    time.sleep(1)  # 처리 시간 시뮬레이션
 
-            try:
-                # 쿼리 처리, 데이터베이스 검색, 답변 생성, 응답 마무리 단계는 그대로 유지
-                # 단, chain 선택 부분만 수정
-                chain = report_chain if st.session_state.mode == "Report Mode" else chatbot_chain
-                response = chain.invoke(question)
+                    # 데이터베이스 검색
+                    status_placeholder.text("데이터베이스 검색 중...")
+                    progress_bar.progress(50)
+                    chain = report_chain if st.session_state.mode == "Report Mode" else chatbot_chain
+                    response = chain.invoke(question)
+                    time.sleep(1)  # 검색 시간 시뮬레이션
+
+                    # 답변 생성
+                    status_placeholder.text("답변 생성 중...")
+                    progress_bar.progress(75)
+                    answer = response['answer'] if st.session_state.mode == "Report Mode" else response
+                    time.sleep(1)  # 생성 시간 시뮬레이션
+
+                    # 응답 마무리
+                    status_placeholder.text("응답 마무리 중...")
+                    progress_bar.progress(100)
+                    time.sleep(0.5)  # 마무리 시간 시뮬레이션
+
+                finally:
+                    # 상태 표시 제거
+                    status_placeholder.empty()
+                    progress_bar.empty()
 
                 # 답변 표시
-                answer = response['answer'] if st.session_state.mode == "Report Mode" else response
                 st.markdown(answer)
 
                 # 소스 표시 (리포트 모드만)
@@ -160,11 +300,6 @@ def main():
 
                 # 대화 기록에 도우미 응답 추가
                 st.session_state.messages.append({"role": "assistant", "content": answer})
-
-            finally:
-                # 상태 표시 제거
-                status_placeholder.empty()
-                progress_bar.empty()
 
     # 대화 초기화 버튼 추가
     if st.button("대화 초기화"):
