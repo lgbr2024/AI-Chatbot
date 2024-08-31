@@ -148,34 +148,48 @@ def main():
     )
 
     # 프롬프트 템플릿 설정 (리포트 모드와 챗봇 모드)
-    report_template = """
-    Human: Please provide a comprehensive report based on the following question and context. Use the style of Harvard Business Review (HBR) and follow these guidelines:
+report_template = """
+    Human: Please write a comprehensive and informative report based on the following question and context. 
+    The report should be approximately 8000 words in total, following this structure:
+
+    1. Conference Overview (about 1000 words)
+       - Explain the overall context of the conference
+       - List the main topics, providing a brief 1-2 sentence explanation for each
+       - Mention speakers or company names where possible
+       - Mention the scale of the conference (number of attendees, number of presentation sessions, etc.) and its importance
+       - Summarize in 1-2 sentences the impact or significance of this conference on the industry
+
+    2. Analysis of Key Content (about 6000 words)
+       - Analyze the key content discussed at the conference and reference sources
+       - For each key session or topic:
+         Topic:
+         Fact: {1. Provide a detailed description of approximately 5 sentences. 2. Include specific examples, numerical data, or case studies mentioned in the session}
+         Your opinion: {Provide a detailed description of approximately 3 sentences}
+         Source: {Show 2~3 data sources for each key topic}
+
+    3. Conclusion and Insights (about 1000 words)
+       - Summarize new trends based on the conference content
+       - Present derived insights from the conference that relate to the user's question. Focus on forward-looking perspectives and industry developments
+       - Suggest 3 follow-up questions that the LG Group representative might ask, and provide brief answers to each (3~4 sentences)
+
+    WRITING GUIDELINES:
+    - USE THE PROVIDED CONTEXT TO ANSWER THE QUESTION
+    - IF YOU DON'T KNOW THE ANSWER, ADMIT IT HONESTLY
+    - WRITE IN KOREAN
+    - ADHERE TO THE LENGTH CONSTRAINTS FOR EACH SECTION
+    - USE THE STYLE OF HARVARD BUSINESS REVIEW (HBR): CLEAR, CONCISE, AND ANALYTICAL WRITING TARGETED AT BUSINESS EXECUTIVES
+    - EMPLOY A PROFESSIONAL TONE WHILE MAINTAINING READABILITY
+    - USE RELEVANT BUSINESS TERMINOLOGY AND CONCEPTS WHERE APPROPRIATE
+    - INCLUDE DATA-DRIVEN INSIGHTS AND ACTIONABLE RECOMMENDATIONS
 
     Question: {question}
     Context: {context}
 
-    Guidelines:
-    1. Start with a conference overview, explaining the context and main themes.
-    2. Analyze key content from the conference, categorizing it into topics, facts, and your opinions.
-    3. Conclude with new trends, insights, and 3 follow-up questions with brief answers.
-    4. Use clear and concise business writing targeted at executives.
-    5. Answer in Korean and provide rich sentences to enhance the quality of the answer.
-    6. Adhere to these length constraints: Conference Overview (약 4000 단어), Contents (약 7000 단어), Conclusion (약 4000 단어).
+    Assistant: 네, 주어진 지침에 따라 Harvard Business Review 스타일로 종합적이고 정보가 풍부한 보고서를 한국어로 작성하겠습니다.
 
-    Assistant: 네, 주어진 지침에 따라 컨퍼런스에 대한 종합적인 보고서를 작성하겠습니다.
-
-    Human: 이제 위의 지침에 따라 보고서를 작성해 주세요.
+    Human: 이제 위의 지침에 따라 약 4000단어 분량의 보고서를 작성해 주세요.
 
     Assistant: [보고서 내용]
-
-    Human: 감사합니다. 이제 챗봇 모드를 위한 간단한 응답을 생성해 주세요. 질문과 컨텍스트는 다음과 같습니다:
-
-    Question: {question}
-    Context: {context}
-
-    Assistant: 네, 주어진 질문과 컨텍스트를 바탕으로 간단한 응답을 생성하겠습니다.
-
-    [챗봇 응답 내용]
     """
     report_prompt = ChatPromptTemplate.from_template(report_template)
 
