@@ -18,6 +18,7 @@ os.environ["ANTHROPIC_API_KEY"] = st.secrets["anthropic_api_key"]
 os.environ["OPENAI_API_KEY"] = st.secrets["openai_api_key"]
 os.environ["PINECONE_API_KEY"] = st.secrets["pinecone_api_key"]
 
+# ModifiedPineconeVectorStore 클래스 정의
 class ModifiedPineconeVectorStore(PineconeVectorStore):
     def __init__(self, index, embedding, text_key: str = "text", namespace: str = ""):
         super().__init__(index, embedding, text_key, namespace)
@@ -147,51 +148,43 @@ def main():
 
     # 프롬프트 템플릿 설정 (리포트 모드와 챗봇 모드)
     report_template = """
-    Human: Please write a comprehensive and informative report based on the following question and context. 
-    The report should be approximately 4000 words in total, following this structure:
-    
-    1. Conference Overview (about 1000 words)
-       - Explain the overall context of the conference
-       - List the main topics, providing a brief 1-2 sentence explanation for each
-       - Mention speakers or company names where possible
-       - Mention the scale of the conference (number of attendees, number of presentation sessions, etc.) and its importance
-       - Summarize in 1-2 sentences the impact or significance of this conference on the industry
-    
-    2. Analysis of Key Content (about 2000 words)
-       - Analyze the key content discussed at the conference and reference sources
-       - For each key session or topic:
-         Topic:
-         Fact: {1. Provide a detailed description of approximately 5 sentences. 2. Include specific examples, numerical data, or case studies mentioned in the session}
-         Your opinion: {Provide a detailed description of approximately 3 sentences}
-         Source: {Show 2~3 data sources for each key topic}
-    
-    3. Conclusion and Insights (about 1000 words)
-       - Summarize new trends based on the conference content
-       - Present derived insights from the conference that relate to the user's question. Focus on forward-looking perspectives and industry developments
-       - Suggest 3 follow-up questions that the LG Group representative might ask, and provide brief answers to each (3~4 sentences)
-    
-    WRITING GUIDELINES:
-    - USE THE PROVIDED CONTEXT TO ANSWER THE QUESTION
-    - IF YOU DON'T KNOW THE ANSWER, ADMIT IT HONESTLY
-    - WRITE IN KOREAN
-    - ADHERE TO THE LENGTH CONSTRAINTS FOR EACH SECTION
-    - USE THE STYLE OF HARVARD BUSINESS REVIEW (HBR): CLEAR, CONCISE, AND ANALYTICAL WRITING TARGETED AT BUSINESS EXECUTIVES
-    - EMPLOY A PROFESSIONAL TONE WHILE MAINTAINING READABILITY
-    - USE RELEVANT BUSINESS TERMINOLOGY AND CONCEPTS WHERE APPROPRIATE
-    - INCLUDE DATA-DRIVEN INSIGHTS AND ACTIONABLE RECOMMENDATIONS
-    
+    Human: Please provide a comprehensive report based on the following question and context. Use the style of Harvard Business Review (HBR) and follow these guidelines:
+
     Question: {question}
     Context: {context}
+
+    Guidelines:
+    1. Start with a conference overview, explaining the context and main themes.
+    2. Analyze key content from the conference, categorizing it into topics, facts, and your opinions.
+    3. Conclude with new trends, insights, and 3 follow-up questions with brief answers.
+    4. Use clear and concise business writing targeted at executives.
+    5. Answer in Korean and provide rich sentences to enhance the quality of the answer.
+    6. Adhere to these length constraints: Conference Overview (약 1000 단어), Contents (약 6000 단어), Conclusion (약 1000 단어).
+
+    Assistant: 네, 주어진 지침에 따라 컨퍼런스에 대한 종합적인 보고서를 작성하겠습니다.
+
+    Human: 이제 위의 지침에 따라 보고서를 작성해 주세요.
+
+    Assistant: [보고서 내용]
+
+    Human: 감사합니다. 이제 챗봇 모드를 위한 간단한 응답을 생성해 주세요. 질문과 컨텍스트는 다음과 같습니다:
+
+    Question: {question}
+    Context: {context}
+
+    Assistant: 네, 주어진 질문과 컨텍스트를 바탕으로 간단한 응답을 생성하겠습니다.
+
+    [챗봇 응답 내용]
     """
     report_prompt = ChatPromptTemplate.from_template(report_template)
 
     chatbot_template = """
-    Human: 다음 질문에 대해 주어진 컨텍스트를 바탕으로 약 3,000자로 대화체로 답변해 주세요. 한국어로 답변해 주세요.
+    Human: 다음 질문에 대해 주어진 컨텍스트를 바탕으로 약 4,000자로 대화체로 답변해 주세요. 한국어로 답변해 주세요.
 
     Question: {question}
     Context: {context}
 
-    Assistant: 네, 주어진 질문에 대해 컨텍스트를 바탕으로 약 3,000자 분량의 대화체 답변을 한국어로 작성하겠습니다.
+    Assistant: 네, 주어진 질문에 대해 컨텍스트를 바탕으로 약 4,000자 분량의 대화체 답변을 한국어로 작성하겠습니다.
 
     [챗봇 응답 내용]
     """
@@ -204,23 +197,23 @@ def main():
             formatted.append(f"Source: {source}")
         return "\n\n" + "\n\n".join(formatted)
 
+    format = RunnableLambda(format_docs)
+
     def get_report_chain(prompt):
+        answer = prompt | llm | StrOutputParser()
         return (
-            RunnableParallel(
-                {"question": RunnablePassthrough(), "docs": retriever}
-            )
-            .assign(context=lambda x: format_docs(x["docs"]))
-            .assign(answer=prompt | llm | StrOutputParser())
+            RunnableParallel(question=RunnablePassthrough(), docs=retriever)
+            .assign(context=format)
+            .assign(answer=answer)
             .pick(["answer", "docs"])
         )
 
     def get_chatbot_chain(prompt):
+        answer = prompt | llm | StrOutputParser()
         return (
-            RunnableParallel(
-                {"question": RunnablePassthrough(), "docs": retriever}
-            )
-            .assign(context=lambda x: format_docs(x["docs"]))
-            .assign(answer=prompt | llm | StrOutputParser())
+            RunnableParallel(question=RunnablePassthrough(), docs=retriever)
+            .assign(context=format)
+            .assign(answer=answer)
             .pick("answer")
         )
 
@@ -261,50 +254,49 @@ def main():
                 st.markdown(question)
 
             with st.chat_message("assistant"):
+                # 상태 업데이트를 위한 플레이스홀더 생성
                 status_placeholder = st.empty()
                 progress_bar = st.progress(0)
 
                 try:
+                    # 쿼리 처리
                     status_placeholder.text("쿼리 처리 중...")
                     progress_bar.progress(25)
-                    time.sleep(1)
+                    time.sleep(1)  # 처리 시간 시뮬레이션
 
+                    # 데이터베이스 검색
                     status_placeholder.text("데이터베이스 검색 중...")
                     progress_bar.progress(50)
                     chain = report_chain if st.session_state.mode == "Report Mode" else chatbot_chain
-                    response = chain.invoke({"question": question})
-                    time.sleep(1)
+                    response = chain.invoke(question)
+                    time.sleep(1)  # 검색 시간 시뮬레이션
 
+                    # 답변 생성
                     status_placeholder.text("답변 생성 중...")
                     progress_bar.progress(75)
-                    if st.session_state.mode == "Report Mode":
-                        answer = response['answer']
-                        sources = response['docs']
-                    else:
-                        answer = response
-                        sources = []
-                    time.sleep(1)
+                    answer = response['answer'] if st.session_state.mode == "Report Mode" else response
+                    time.sleep(1)  # 생성 시간 시뮬레이션
 
+                    # 응답 마무리
                     status_placeholder.text("응답 마무리 중...")
                     progress_bar.progress(100)
-                    time.sleep(0.5)
-
-                except Exception as e:
-                    st.error(f"오류가 발생했습니다: {str(e)}")
-                    answer = "죄송합니다. 응답 생성 중 오류가 발생했습니다. 다시 시도해 주세요."
-                    sources = []
+                    time.sleep(0.5)  # 마무리 시간 시뮬레이션
 
                 finally:
+                    # 상태 표시 제거
                     status_placeholder.empty()
                     progress_bar.empty()
 
+                # 답변 표시
                 st.markdown(answer)
 
-                if st.session_state.mode == "Report Mode" and sources:
+                # 소스 표시 (리포트 모드만)
+                if st.session_state.mode == "Report Mode":
                     with st.expander("Sources"):
-                        for doc in sources:
+                        for doc in response['docs']:
                             st.write(f"- {doc.metadata['source']}")
 
+                # 대화 기록에 도우미 응답 추가
                 st.session_state.messages.append({"role": "assistant", "content": answer})
 
     # 대화 초기화 버튼 추가
