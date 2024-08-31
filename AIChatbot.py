@@ -148,7 +148,7 @@ def main():
     )
 
     # 프롬프트 템플릿 설정 (리포트 모드와 챗봇 모드)
-report_template = """
+    report_template = """
     Human: Please write a comprehensive and informative report based on the following question and context. 
     The report should be approximately 8000 words in total, following this structure:
 
