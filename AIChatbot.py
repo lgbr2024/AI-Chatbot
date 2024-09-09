@@ -185,7 +185,7 @@ def main():
     3. Conclude with new trends, insights, and 3 follow-up questions with brief answers.
     4. Use clear and concise business writing targeted at executives.
     5. Answer in Korean and provide rich sentences to enhance the quality of the answer.
-    6. Adhere to these length constraints: Conference Overview (약 1000 단어), Contents (약 6000 단어), Conclusion (약 1000 단어).
+    6. Adhere to these length constraints: Conference Overview (약 2000 단어), Contents (약 18000 단어), Conclusion (약 2000 단어).
 
     Assistant: 네, 주어진 지침에 따라 컨퍼런스에 대한 종합적인 보고서를 작성하겠습니다.
 
@@ -205,12 +205,12 @@ def main():
     report_prompt = ChatPromptTemplate.from_template(report_template)
 
     chatbot_template = """
-    Human: 다음 질문에 대해 주어진 컨텍스트를 바탕으로 약 4,000자로 대화체로 답변해 주세요. 한국어로 답변해 주세요.
+    Human: 다음 질문에 대해 주어진 컨텍스트를 바탕으로 약 20,000자로 대화체로 답변해 주세요. 한국어로 답변해 주세요.
 
     Question: {question}
     Context: {context}
 
-    Assistant: 네, 주어진 질문에 대해 컨텍스트를 바탕으로 약 4,000자 분량의 대화체 답변을 한국어로 작성하겠습니다.
+    Assistant: 네, 주어진 질문에 대해 컨텍스트를 바탕으로 약 20,000자 분량의 대화체 답변을 한국어로 작성하겠습니다.
 
     [챗봇 응답 내용]
     """
