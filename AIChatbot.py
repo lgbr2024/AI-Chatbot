@@ -112,37 +112,16 @@ def maximal_marginal_relevance(
         candidate_indices.remove(max_index)
     return selected_indices
 
-# 문서 포맷팅 함수 수정
-def format_docs(docs: Any) -> str:
-    logging.debug(f"format_docs 함수가 받은 데이터 유형: {type(docs)}")
-    logging.debug(f"docs의 내용: {docs}")
-    
+def format_docs(docs: List[Document]) -> str:
     formatted = []
-    
-    if isinstance(docs, list):
-        for doc in docs:
-            logging.debug(f"처리 중인 doc의 유형: {type(doc)}")
-            if isinstance(doc, Document):
-                source = doc.metadata.get('source', '알 수 없는 출처')
-            elif isinstance(doc, dict):
-                source = doc.get('metadata', {}).get('source', '알 수 없는 출처')
-            elif isinstance(doc, str):
-                # 문자열일 경우, 그냥 그대로 추가
-                formatted.append(f"출처: {doc}")
-                continue  # 다음 루프로 넘어감
-            else:
-                source = f"알 수 없는 출처 (유형: {type(doc)})"
-            logging.debug(f"추출된 출처: {source}")
-            formatted.append(f"출처: {source}")
-    elif isinstance(docs, dict):
-        source = docs.get('metadata', {}).get('source', '알 수 없는 출처')
+    for doc in docs:
+        logging.debug(f"문서 처리 중: {type(doc)}")
+        if isinstance(doc, Document):
+            logging.debug(f"문서 메타데이터: {doc.metadata if hasattr(doc, 'metadata') else '메타데이터 없음'}")
+            source = doc.metadata.get('source', '알 수 없는 출처') if hasattr(doc, 'metadata') else '알 수 없는 출처'
+        else:
+            source = '알 수 없는 출처'
         formatted.append(f"출처: {source}")
-    elif isinstance(docs, str):
-        # docs가 문자열일 경우 그대로 추가
-        formatted.append(f"출처: {docs}")
-    else:
-        formatted.append(f"알 수 없는 형식의 문서 (유형: {type(docs)})")
-    
     return "\n\n" + "\n\n".join(formatted)
 
 def main():
@@ -151,8 +130,6 @@ def main():
     # 세션 상태 초기화
     if "messages" not in st.session_state:
         st.session_state.messages = []
-    if "chat_history" not in st.session_state:
-        st.session_state.chat_history = []
     if "mode" not in st.session_state:
         st.session_state.mode = "Report Mode"
 
@@ -197,23 +174,24 @@ def main():
 
     # 프롬프트 템플릿 설정 (리포트 모드와 챗봇 모드)
     report_template = """
-    Human: 다음 질문과 컨텍스트, 그리고 이전 대화 내용을 바탕으로 약 20,000자 분량의 종합적인 보고서를 작성해 주세요. Harvard Business Review (HBR) 스타일을 사용하고 다음 지침을 따라주세요:
+    Human: Please provide a comprehensive report based on the following question and context. Use the style of Harvard Business Review (HBR) and follow these guidelines:
 
-    질문: {question}
-    컨텍스트: {context}
-    이전 대화 내용: {chat_history}
+    Question: {question}
+    Context: {context}
 
-    지침:
-    1. 컨퍼런스 개요로 시작하여 맥락과 주요 주제를 설명하세요.
-    2. 컨퍼런스의 주요 내용을 분석하고, 주제, 사실, 귀하의 의견으로 분류하세요.
-    3. 새로운 트렌드, 인사이트, 그리고 간단한 답변이 포함된 3가지 후속 질문으로 결론을 맺으세요.
-    4. 경영진을 대상으로 한 명확하고 간결한 비즈니스 문체를 사용하세요.
-    5. 한국어로 답변하고, 풍부한 문장을 사용하여 답변의 질을 높이세요.
-    6. 전체 보고서의 길이가 약 20,000자가 되도록 작성해 주세요.
+    Guidelines:
+    1. Start with a conference overview, explaining the context and main themes.
+    2. Analyze key content from the conference, categorizing it into topics, facts, and your opinions.
+    3. Conclude with new trends, insights, and 3 follow-up questions with brief answers.
+    4. Use clear and concise business writing targeted at executives.
+    5. Answer in Korean and provide rich sentences to enhance the quality of the answer.
+    6. Adhere to these length constraints: Conference Overview (약 2000 단어), Contents (약 18000 단어), Conclusion (약 2000 단어).
 
-    Assistant: 네, 이해했습니다. 주어진 질문, 컨텍스트, 이전 대화 내용을 바탕으로 약 20,000자 분량의 종합적인 보고서를 작성하겠습니다.
+    Assistant: 네, 주어진 지침에 따라 컨퍼런스에 대한 종합적인 보고서를 작성하겠습니다.
 
-    [보고서 내용]
+    Human: 이제 위의 지침에 따라 보고서를 작성해 주세요.
+
+    Assistant: [보고서 내용]
 
     Human: 감사합니다. 이제 챗봇 모드를 위한 간단한 응답을 생성해 주세요. 질문과 컨텍스트는 다음과 같습니다:
 
@@ -227,16 +205,12 @@ def main():
     report_prompt = ChatPromptTemplate.from_template(report_template)
 
     chatbot_template = """
-    Human: 당신은 IT 컨퍼런스에 대한 정보를 제공하는 AI 어시스턴트입니다. 다음은 지금까지의 대화 내용입니다:
-
-    {chat_history}
-
-    이제 다음 질문에 대해 주어진 컨텍스트를 바탕으로 약 10,000자로 대화체로 답변해 주세요. 한국어로 답변해 주세요.
+    Human: 다음 질문에 대해 주어진 컨텍스트를 바탕으로 약 20,000자로 대화체로 답변해 주세요. 한국어로 답변해 주세요.
 
     Question: {question}
     Context: {context}
 
-    Assistant: 네, 이해했습니다. 지금까지의 대화 내용과 주어진 질문, 그리고 컨텍스트를 바탕으로 약 10,000자 분량의 대화체 답변을 한국어로 작성하겠습니다.
+    Assistant: 네, 주어진 질문에 대해 컨텍스트를 바탕으로 약 20,000자 분량의 대화체 답변을 한국어로 작성하겠습니다.
 
     [챗봇 응답 내용]
     """
@@ -248,28 +222,19 @@ def main():
         answer = prompt | llm | StrOutputParser()
         return (
             RunnableParallel(question=RunnablePassthrough(), docs=retriever)
-            .assign(context=lambda x: format_docs(x['docs']))
-            .assign(chat_history=lambda x: format_chat_history(st.session_state.chat_history))
+            .assign(context=format)
             .assign(answer=answer)
             .pick(["answer", "docs"])
         )
-    
+
     def get_chatbot_chain(prompt):
         answer = prompt | llm | StrOutputParser()
         return (
             RunnableParallel(question=RunnablePassthrough(), docs=retriever)
-            .assign(context=lambda x: format_docs(x['docs']))
-            .assign(chat_history=lambda x: format_chat_history(st.session_state.chat_history))
+            .assign(context=format)
             .assign(answer=answer)
             .pick("answer")
         )
-
-    def format_chat_history(chat_history):
-        formatted = []
-        for message in chat_history:
-            role = "Human" if message["role"] == "user" else "Assistant"
-            formatted.append(f"{role}: {message['content']}")
-        return "\n".join(formatted)
 
     report_chain = get_report_chain(report_prompt)
     chatbot_chain = get_chatbot_chain(chatbot_prompt)
@@ -279,7 +244,6 @@ def main():
     if new_mode != st.session_state.mode:
         st.session_state.mode = new_mode
         st.session_state.messages = []  # 모드 변경 시 대화 기록 초기화
-        st.session_state.chat_history = []  # 모드 변경 시 채팅 히스토리 초기화
         st.rerun()
 
     # 현재 모드 표시
@@ -288,7 +252,6 @@ def main():
     # 대화 초기화 함수
     def reset_conversation():
         st.session_state.messages = []
-        st.session_state.chat_history = []
         st.rerun()
 
     # 리셋 키워드 확인
@@ -306,7 +269,6 @@ def main():
             reset_conversation()
         else:
             st.session_state.messages.append({"role": "user", "content": question})
-            st.session_state.chat_history.append({"role": "user", "content": question})
             with st.chat_message("user"):
                 st.markdown(question)
 
@@ -325,16 +287,13 @@ def main():
                     status_placeholder.text("데이터베이스 검색 중...")
                     progress_bar.progress(50)
                     chain = report_chain if st.session_state.mode == "Report Mode" else chatbot_chain
-                    logging.debug(f"Using chain: {type(chain)}")
                     response = chain.invoke(question)
-                    logging.debug(f"Chain response: {response}")
                     time.sleep(1)  # 검색 시간 시뮬레이션
 
                     # 답변 생성
                     status_placeholder.text("답변 생성 중...")
                     progress_bar.progress(75)
                     answer = response['answer'] if st.session_state.mode == "Report Mode" else response
-                    logging.debug(f"Generated answer: {answer[:100]}...")  # 답변의 처음 100자만 로깅
                     time.sleep(1)  # 생성 시간 시뮬레이션
 
                     # 응답 마무리
@@ -343,8 +302,8 @@ def main():
                     time.sleep(0.5)  # 마무리 시간 시뮬레이션
 
                 except Exception as e:
-                    logging.exception(f"Error occurred during response generation: {e}")
-                    st.error("응답을 생성하는 동안 오류가 발생했습니다. 자세한 내용은 로그를 확인해 주세요.")
+                    logging.error(f"응답 생성 중 오류 발생: {e}")
+                    st.error("응답을 생성하는 동안 오류가 발생했습니다. 다시 시도해 주세요.")
                     return
 
                 finally:
@@ -355,6 +314,7 @@ def main():
                 # 답변 표시
                 st.markdown(answer)
 
+                # 소스 표시
                 # 소스 표시 (리포트 모드만)
                 if st.session_state.mode == "Report Mode":
                     with st.expander("Sources"):
@@ -369,7 +329,6 @@ def main():
 
                 # 대화 기록에 도우미 응답 추가
                 st.session_state.messages.append({"role": "assistant", "content": answer})
-                st.session_state.chat_history.append({"role": "assistant", "content": answer})
 
     # 대화 초기화 버튼 추가
     if st.button("대화 초기화"):
@@ -379,5 +338,5 @@ if __name__ == "__main__":
     try:
         main()
     except Exception as e:
-        logging.exception(f"애플리케이션 실행 중 예기치 못한 오류 발생: {e}")
+        logging.error(f"애플리케이션 실행 중 예기치 못한 오류 발생: {e}")
         st.error("애플리케이션 실행 중 오류가 발생했습니다. 관리자에게 문의하세요.")
