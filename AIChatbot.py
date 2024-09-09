@@ -112,6 +112,7 @@ def maximal_marginal_relevance(
         candidate_indices.remove(max_index)
     return selected_indices
 
+# 문서 포맷팅 함수 수정
 def format_docs(docs: Any) -> str:
     logging.debug(f"format_docs 함수가 받은 데이터 유형: {type(docs)}")
     logging.debug(f"docs의 내용: {docs}")
@@ -143,8 +144,6 @@ def format_docs(docs: Any) -> str:
         formatted.append(f"알 수 없는 형식의 문서 (유형: {type(docs)})")
     
     return "\n\n" + "\n\n".join(formatted)
-
-
 
 def main():
     st.title("🤞Conference Q&A System")
