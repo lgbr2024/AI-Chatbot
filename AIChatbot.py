@@ -111,16 +111,16 @@ def maximal_marginal_relevance(
         selected_indices.append(max_index)
         candidate_indices.remove(max_index)
     return selected_indices
-
+    
 def format_docs(docs: Any) -> str:
-    logging.debug(f"format_docs received: {type(docs)}")
-    logging.debug(f"Contents of docs: {docs}")
+    logging.debug(f"format_docs 함수가 받은 데이터 유형: {type(docs)}")
+    logging.debug(f"docs의 내용: {docs}")
     
     formatted = []
     
     if isinstance(docs, list):
         for doc in docs:
-            logging.debug(f"Processing doc of type: {type(doc)}")
+            logging.debug(f"처리 중인 doc의 유형: {type(doc)}")
             if isinstance(doc, Document):
                 source = doc.metadata.get('source', '알 수 없는 출처')
             elif isinstance(doc, dict):
@@ -128,8 +128,8 @@ def format_docs(docs: Any) -> str:
             elif isinstance(doc, str):
                 source = doc
             else:
-                source = f"알 수 없는 출처 (타입: {type(doc)})"
-            logging.debug(f"Extracted source: {source}")
+                source = f"알 수 없는 출처 (유형: {type(doc)})"
+            logging.debug(f"추출된 출처: {source}")
             formatted.append(f"출처: {source}")
     elif isinstance(docs, dict):
         source = docs.get('metadata', {}).get('source', '알 수 없는 출처')
@@ -137,7 +137,7 @@ def format_docs(docs: Any) -> str:
     elif isinstance(docs, str):
         formatted.append(f"출처: {docs}")
     else:
-        formatted.append(f"알 수 없는 형식의 문서 (타입: {type(docs)})")
+        formatted.append(f"알 수 없는 형식의 문서 (유형: {type(docs)})")
     
     return "\n\n" + "\n\n".join(formatted)
 
