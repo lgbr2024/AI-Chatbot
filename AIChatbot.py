@@ -114,18 +114,28 @@ def maximal_marginal_relevance(
 
 def format_docs(docs: List[Any]) -> str:
     formatted = []
-    for doc in docs:
-        logging.debug(f"Processing doc of type: {type(doc)}")
-        if isinstance(doc, Document):
-            source = doc.metadata.get('source', '알 수 없는 출처')
-        elif isinstance(doc, dict) and 'metadata' in doc:
-            source = doc['metadata'].get('source', '알 수 없는 출처')
-        elif isinstance(doc, str):
-            source = doc
-        else:
-            source = '알 수 없는 출처'
-        logging.debug(f"Extracted source: {source}")
+    logging.debug(f"format_docs received: {type(docs)}")
+    logging.debug(f"Contents of docs: {docs}")
+    
+    if isinstance(docs, list):
+        for doc in docs:
+            logging.debug(f"Processing doc of type: {type(doc)}")
+            if isinstance(doc, Document):
+                source = doc.metadata.get('source', '알 수 없는 출처')
+            elif isinstance(doc, dict):
+                source = doc.get('metadata', {}).get('source', '알 수 없는 출처')
+            elif isinstance(doc, str):
+                source = doc
+            else:
+                source = f"알 수 없는 출처 (타입: {type(doc)})"
+            logging.debug(f"Extracted source: {source}")
+            formatted.append(f"출처: {source}")
+    elif isinstance(docs, dict):
+        source = docs.get('metadata', {}).get('source', '알 수 없는 출처')
         formatted.append(f"출처: {source}")
+    else:
+        formatted.append(f"알 수 없는 형식의 문서 (타입: {type(docs)})")
+    
     return "\n\n" + "\n\n".join(formatted)
 
 def main():
@@ -180,24 +190,23 @@ def main():
 
     # 프롬프트 템플릿 설정 (리포트 모드와 챗봇 모드)
     report_template = """
-    Human: Please provide a comprehensive report based on the following question and context. Use the style of Harvard Business Review (HBR) and follow these guidelines:
+    Human: 다음 질문과 컨텍스트, 그리고 이전 대화 내용을 바탕으로 약 20,000자 분량의 종합적인 보고서를 작성해 주세요. Harvard Business Review (HBR) 스타일을 사용하고 다음 지침을 따라주세요:
 
-    Question: {question}
-    Context: {context}
+    질문: {question}
+    컨텍스트: {context}
+    이전 대화 내용: {chat_history}
 
-    Guidelines:
-    1. Start with a conference overview, explaining the context and main themes.
-    2. Analyze key content from the conference, categorizing it into topics, facts, and your opinions.
-    3. Conclude with new trends, insights, and 3 follow-up questions with brief answers.
-    4. Use clear and concise business writing targeted at executives.
-    5. Answer in Korean and provide rich sentences to enhance the quality of the answer.
-    6. Adhere to these length constraints: Conference Overview (약 2000 단어), Contents (약 18000 단어), Conclusion (약 2000 단어).
+    지침:
+    1. 컨퍼런스 개요로 시작하여 맥락과 주요 주제를 설명하세요.
+    2. 컨퍼런스의 주요 내용을 분석하고, 주제, 사실, 귀하의 의견으로 분류하세요.
+    3. 새로운 트렌드, 인사이트, 그리고 간단한 답변이 포함된 3가지 후속 질문으로 결론을 맺으세요.
+    4. 경영진을 대상으로 한 명확하고 간결한 비즈니스 문체를 사용하세요.
+    5. 한국어로 답변하고, 풍부한 문장을 사용하여 답변의 질을 높이세요.
+    6. 전체 보고서의 길이가 약 20,000자가 되도록 작성해 주세요.
 
-    Assistant: 네, 주어진 지침에 따라 컨퍼런스에 대한 종합적인 보고서를 작성하겠습니다.
+    Assistant: 네, 이해했습니다. 주어진 질문, 컨텍스트, 이전 대화 내용을 바탕으로 약 20,000자 분량의 종합적인 보고서를 작성하겠습니다.
 
-    Human: 이제 위의 지침에 따라 보고서를 작성해 주세요.
-
-    Assistant: [보고서 내용]
+    [보고서 내용]
 
     Human: 감사합니다. 이제 챗봇 모드를 위한 간단한 응답을 생성해 주세요. 질문과 컨텍스트는 다음과 같습니다:
 
@@ -233,6 +242,7 @@ def main():
         return (
             RunnableParallel(question=RunnablePassthrough(), docs=retriever)
             .assign(context=format)
+            .assign(chat_history=lambda x: format_chat_history(st.session_state.chat_history))
             .assign(answer=answer)
             .pick(["answer", "docs"])
         )
@@ -247,7 +257,6 @@ def main():
             .pick("answer")
         )
 
-  
     def format_chat_history(chat_history):
         formatted = []
         for message in chat_history:
@@ -309,13 +318,16 @@ def main():
                     status_placeholder.text("데이터베이스 검색 중...")
                     progress_bar.progress(50)
                     chain = report_chain if st.session_state.mode == "Report Mode" else chatbot_chain
+                    logging.debug(f"Using chain: {type(chain)}")
                     response = chain.invoke(question)
+                    logging.debug(f"Chain response: {response}")
                     time.sleep(1)  # 검색 시간 시뮬레이션
 
                     # 답변 생성
                     status_placeholder.text("답변 생성 중...")
                     progress_bar.progress(75)
                     answer = response['answer'] if st.session_state.mode == "Report Mode" else response
+                    logging.debug(f"Generated answer: {answer[:100]}...")  # 답변의 처음 100자만 로깅
                     time.sleep(1)  # 생성 시간 시뮬레이션
 
                     # 응답 마무리
@@ -324,8 +336,8 @@ def main():
                     time.sleep(0.5)  # 마무리 시간 시뮬레이션
 
                 except Exception as e:
-                    logging.error(f"응답 생성 중 오류 발생: {e}")
-                    st.error("응답을 생성하는 동안 오류가 발생했습니다. 다시 시도해 주세요.")
+                    logging.exception(f"Error occurred during response generation: {e}")
+                    st.error("응답을 생성하는 동안 오류가 발생했습니다. 자세한 내용은 로그를 확인해 주세요.")
                     return
 
                 finally:
@@ -360,5 +372,5 @@ if __name__ == "__main__":
     try:
         main()
     except Exception as e:
-        logging.error(f"애플리케이션 실행 중 예기치 못한 오류 발생: {e}")
+        logging.exception(f"애플리케이션 실행 중 예기치 못한 오류 발생: {e}")
         st.error("애플리케이션 실행 중 오류가 발생했습니다. 관리자에게 문의하세요.")
