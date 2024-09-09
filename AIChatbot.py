@@ -12,6 +12,10 @@ from langchain_pinecone import PineconeVectorStore
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 import time
+import logging
+
+# 로깅 설정
+logging.basicConfig(level=logging.DEBUG)
 
 # API 키 설정
 os.environ["ANTHROPIC_API_KEY"] = st.secrets["anthropic_api_key"]
@@ -108,6 +112,18 @@ def maximal_marginal_relevance(
         candidate_indices.remove(max_index)
     return selected_indices
 
+def format_docs(docs: List[Document]) -> str:
+    formatted = []
+    for doc in docs:
+        logging.debug(f"문서 처리 중: {type(doc)}")
+        if isinstance(doc, Document):
+            logging.debug(f"문서 메타데이터: {doc.metadata if hasattr(doc, 'metadata') else '메타데이터 없음'}")
+            source = doc.metadata.get('source', '알 수 없는 출처') if hasattr(doc, 'metadata') else '알 수 없는 출처'
+        else:
+            source = '알 수 없는 출처'
+        formatted.append(f"출처: {source}")
+    return "\n\n" + "\n\n".join(formatted)
+
 def main():
     st.title("🤞Conference Q&A System")
 
@@ -118,9 +134,14 @@ def main():
         st.session_state.mode = "Report Mode"
 
     # Pinecone 초기화
-    pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
-    index_name = "itconference"
-    index = pc.Index(index_name)
+    try:
+        pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
+        index_name = "itconference"
+        index = pc.Index(index_name)
+    except Exception as e:
+        logging.error(f"Pinecone 초기화 오류: {e}")
+        st.error("Pinecone 초기화 중 오류가 발생했습니다. 관리자에게 문의하세요.")
+        return
 
     # Claude 모델 선택
     if "claude_model" not in st.session_state:
@@ -134,11 +155,16 @@ def main():
     llm = ChatAnthropic(model=st.session_state.claude_model)
 
     # Pinecone 벡터 스토어 설정
-    vectorstore = ModifiedPineconeVectorStore(
-        index=index,
-        embedding=OpenAIEmbeddings(model="text-embedding-ada-002"),
-        text_key="source"
-    )
+    try:
+        vectorstore = ModifiedPineconeVectorStore(
+            index=index,
+            embedding=OpenAIEmbeddings(model="text-embedding-ada-002"),
+            text_key="source"
+        )
+    except Exception as e:
+        logging.error(f"벡터 스토어 설정 오류: {e}")
+        st.error("벡터 스토어 설정 중 오류가 발생했습니다. 관리자에게 문의하세요.")
+        return
 
     # 검색기 설정
     retriever = vectorstore.as_retriever(
@@ -189,13 +215,6 @@ def main():
     [챗봇 응답 내용]
     """
     chatbot_prompt = ChatPromptTemplate.from_template(chatbot_template)
-
-    def format_docs(docs: List[Document]) -> str:
-        formatted = []
-        for doc in docs:
-            source = doc.metadata.get('source', 'Unknown source')
-            formatted.append(f"Source: {source}")
-        return "\n\n" + "\n\n".join(formatted)
 
     format = RunnableLambda(format_docs)
 
@@ -282,6 +301,11 @@ def main():
                     progress_bar.progress(100)
                     time.sleep(0.5)  # 마무리 시간 시뮬레이션
 
+                except Exception as e:
+                    logging.error(f"응답 생성 중 오류 발생: {e}")
+                    st.error("응답을 생성하는 동안 오류가 발생했습니다. 다시 시도해 주세요.")
+                    return
+
                 finally:
                     # 상태 표시 제거
                     status_placeholder.empty()
@@ -290,11 +314,18 @@ def main():
                 # 답변 표시
                 st.markdown(answer)
 
+                # 소스 표시
                 # 소스 표시 (리포트 모드만)
                 if st.session_state.mode == "Report Mode":
                     with st.expander("Sources"):
-                        for doc in response['docs']:
-                            st.write(f"- {doc.metadata['source']}")
+                        if isinstance(response, dict) and 'docs' in response:
+                            for doc in response['docs']:
+                                if isinstance(doc, Document) and hasattr(doc, 'metadata'):
+                                    st.write(f"- {doc.metadata.get('source', '알 수 없는 출처')}")
+                                else:
+                                    st.write("- 알 수 없는 출처")
+                        else:
+                            st.write("소스 정보를 표시할 수 없습니다.")
 
                 # 대화 기록에 도우미 응답 추가
                 st.session_state.messages.append({"role": "assistant", "content": answer})
@@ -304,4 +335,8 @@ def main():
         reset_conversation()
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        logging.error(f"애플리케이션 실행 중 예기치 못한 오류 발생: {e}")
+        st.error("애플리케이션 실행 중 오류가 발생했습니다. 관리자에게 문의하세요.")
