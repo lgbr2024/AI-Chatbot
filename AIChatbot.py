@@ -119,7 +119,7 @@ def main():
 
     # Pinecone 초기화
     pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
-    index_name = "conference"
+    index_name = "itconference"
     index = pc.Index(index_name)
 
     # Claude 모델 선택
