@@ -128,7 +128,7 @@ def format_docs(docs: Any) -> str:
             elif isinstance(doc, str):
                 # 문자열일 경우, 그냥 그대로 추가
                 formatted.append(f"출처: {doc}")
-                continue  # 다음 루프를 처리
+                continue  # 다음 루프로 넘어감
             else:
                 source = f"알 수 없는 출처 (유형: {type(doc)})"
             logging.debug(f"추출된 출처: {source}")
@@ -137,11 +137,13 @@ def format_docs(docs: Any) -> str:
         source = docs.get('metadata', {}).get('source', '알 수 없는 출처')
         formatted.append(f"출처: {source}")
     elif isinstance(docs, str):
-        formatted.append(f"출처: {docs}")  # 문자열인 경우, 그대로 출력
+        # docs가 문자열일 경우 그대로 추가
+        formatted.append(f"출처: {docs}")
     else:
         formatted.append(f"알 수 없는 형식의 문서 (유형: {type(docs)})")
     
     return "\n\n" + "\n\n".join(formatted)
+
 
 
 def main():
