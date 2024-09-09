@@ -235,7 +235,7 @@ def main():
             .assign(context=format)
             .assign(answer=answer)
             .pick(["answer", "docs"])
-        )
+    )
 
     def get_chatbot_chain(prompt):
     answer = prompt | llm | StrOutputParser()
