@@ -112,15 +112,17 @@ def maximal_marginal_relevance(
         candidate_indices.remove(max_index)
     return selected_indices
 
-def format_docs(docs: List[Document]) -> str:
+def format_docs(docs: List[Any]) -> str:
     formatted = []
     for doc in docs:
-        logging.debug(f"문서 처리 중: {type(doc)}")
+        logging.debug(f"Processing doc of type: {type(doc)}")
         if isinstance(doc, Document):
-            logging.debug(f"문서 메타데이터: {doc.metadata if hasattr(doc, 'metadata') else '메타데이터 없음'}")
-            source = doc.metadata.get('source', '알 수 없는 출처') if hasattr(doc, 'metadata') else '알 수 없는 출처'
+            source = doc.metadata.get('source', '알 수 없는 출처')
+        elif isinstance(doc, str):
+            source = doc
         else:
             source = '알 수 없는 출처'
+        logging.debug(f"Extracted source: {source}")
         formatted.append(f"출처: {source}")
     return "\n\n" + "\n\n".join(formatted)
 
