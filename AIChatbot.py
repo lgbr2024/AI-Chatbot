@@ -130,6 +130,8 @@ def main():
     # 세션 상태 초기화
     if "messages" not in st.session_state:
         st.session_state.messages = []
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
     if "mode" not in st.session_state:
         st.session_state.mode = "Report Mode"
 
@@ -205,12 +207,16 @@ def main():
     report_prompt = ChatPromptTemplate.from_template(report_template)
 
     chatbot_template = """
-    Human: 다음 질문에 대해 주어진 컨텍스트를 바탕으로 약 20,000자로 대화체로 답변해 주세요. 한국어로 답변해 주세요.
+    Human: 당신은 IT 컨퍼런스에 대한 정보를 제공하는 AI 어시스턴트입니다. 다음은 지금까지의 대화 내용입니다:
+
+    {chat_history}
+
+    이제 다음 질문에 대해 주어진 컨텍스트를 바탕으로 약 10,000자로 대화체로 답변해 주세요. 한국어로 답변해 주세요.
 
     Question: {question}
     Context: {context}
 
-    Assistant: 네, 주어진 질문에 대해 컨텍스트를 바탕으로 약 20,000자 분량의 대화체 답변을 한국어로 작성하겠습니다.
+    Assistant: 네, 이해했습니다. 지금까지의 대화 내용과 주어진 질문, 그리고 컨텍스트를 바탕으로 약 10,000자 분량의 대화체 답변을 한국어로 작성하겠습니다.
 
     [챗봇 응답 내용]
     """
@@ -232,9 +238,17 @@ def main():
         return (
             RunnableParallel(question=RunnablePassthrough(), docs=retriever)
             .assign(context=format)
+            .assign(chat_history=lambda x: format_chat_history(st.session_state.chat_history))
             .assign(answer=answer)
             .pick("answer")
         )
+
+    def format_chat_history(chat_history):
+        formatted = []
+        for message in chat_history:
+            role = "Human" if message["role"] == "user" else "Assistant"
+            formatted.append(f"{role}: {message['content']}")
+        return "\n".join(formatted)
 
     report_chain = get_report_chain(report_prompt)
     chatbot_chain = get_chatbot_chain(chatbot_prompt)
@@ -244,6 +258,7 @@ def main():
     if new_mode != st.session_state.mode:
         st.session_state.mode = new_mode
         st.session_state.messages = []  # 모드 변경 시 대화 기록 초기화
+        st.session_state.chat_history = []  # 모드 변경 시 채팅 히스토리 초기화
         st.rerun()
 
     # 현재 모드 표시
@@ -252,6 +267,7 @@ def main():
     # 대화 초기화 함수
     def reset_conversation():
         st.session_state.messages = []
+        st.session_state.chat_history = []
         st.rerun()
 
     # 리셋 키워드 확인
@@ -269,6 +285,7 @@ def main():
             reset_conversation()
         else:
             st.session_state.messages.append({"role": "user", "content": question})
+            st.session_state.chat_history.append({"role": "user", "content": question})
             with st.chat_message("user"):
                 st.markdown(question)
 
@@ -314,7 +331,6 @@ def main():
                 # 답변 표시
                 st.markdown(answer)
 
-                # 소스 표시
                 # 소스 표시 (리포트 모드만)
                 if st.session_state.mode == "Report Mode":
                     with st.expander("Sources"):
@@ -329,6 +345,7 @@ def main():
 
                 # 대화 기록에 도우미 응답 추가
                 st.session_state.messages.append({"role": "assistant", "content": answer})
+                st.session_state.chat_history.append({"role": "assistant", "content": answer})
 
     # 대화 초기화 버튼 추가
     if st.button("대화 초기화"):
