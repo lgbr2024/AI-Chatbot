@@ -118,6 +118,8 @@ def format_docs(docs: List[Any]) -> str:
         logging.debug(f"Processing doc of type: {type(doc)}")
         if isinstance(doc, Document):
             source = doc.metadata.get('source', '알 수 없는 출처')
+        elif isinstance(doc, dict) and 'metadata' in doc:
+            source = doc['metadata'].get('source', '알 수 없는 출처')
         elif isinstance(doc, str):
             source = doc
         else:
@@ -236,15 +238,16 @@ def main():
         )
 
     def get_chatbot_chain(prompt):
-        answer = prompt | llm | StrOutputParser()
-        return (
-            RunnableParallel(question=RunnablePassthrough(), docs=retriever)
-            .assign(context=format)
-            .assign(chat_history=lambda x: format_chat_history(st.session_state.chat_history))
-            .assign(answer=answer)
-            .pick("answer")
-        )
+    answer = prompt | llm | StrOutputParser()
+    return (
+        RunnableParallel(question=RunnablePassthrough(), docs=retriever)
+        .assign(context=lambda x: format_docs(x['docs']))
+        .assign(chat_history=lambda x: format_chat_history(st.session_state.chat_history))
+        .assign(answer=answer)
+        .pick("answer")
+    )
 
+  
     def format_chat_history(chat_history):
         formatted = []
         for message in chat_history:
