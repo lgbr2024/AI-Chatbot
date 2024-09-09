@@ -126,7 +126,9 @@ def format_docs(docs: Any) -> str:
             elif isinstance(doc, dict):
                 source = doc.get('metadata', {}).get('source', '알 수 없는 출처')
             elif isinstance(doc, str):
-                source = doc  # 문자열인 경우, 그대로 출력
+                # 문자열일 경우, 그냥 그대로 추가
+                formatted.append(f"출처: {doc}")
+                continue  # 다음 루프를 처리
             else:
                 source = f"알 수 없는 출처 (유형: {type(doc)})"
             logging.debug(f"추출된 출처: {source}")
