@@ -111,7 +111,7 @@ def maximal_marginal_relevance(
         selected_indices.append(max_index)
         candidate_indices.remove(max_index)
     return selected_indices
-    
+
 def format_docs(docs: Any) -> str:
     logging.debug(f"format_docs 함수가 받은 데이터 유형: {type(docs)}")
     logging.debug(f"docs의 내용: {docs}")
