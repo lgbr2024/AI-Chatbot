@@ -235,17 +235,17 @@ def main():
             .assign(context=format)
             .assign(answer=answer)
             .pick(["answer", "docs"])
-    )
+        )
 
     def get_chatbot_chain(prompt):
-    answer = prompt | llm | StrOutputParser()
-    return (
-        RunnableParallel(question=RunnablePassthrough(), docs=retriever)
-        .assign(context=lambda x: format_docs(x['docs']))
-        .assign(chat_history=lambda x: format_chat_history(st.session_state.chat_history))
-        .assign(answer=answer)
-        .pick("answer")
-    )
+        answer = prompt | llm | StrOutputParser()
+        return (
+            RunnableParallel(question=RunnablePassthrough(), docs=retriever)
+            .assign(context=lambda x: format_docs(x['docs']))
+            .assign(chat_history=lambda x: format_chat_history(st.session_state.chat_history))
+            .assign(answer=answer)
+            .pick("answer")
+        )
 
   
     def format_chat_history(chat_history):
