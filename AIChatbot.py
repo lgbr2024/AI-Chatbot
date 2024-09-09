@@ -112,10 +112,11 @@ def maximal_marginal_relevance(
         candidate_indices.remove(max_index)
     return selected_indices
 
-def format_docs(docs: List[Any]) -> str:
-    formatted = []
+def format_docs(docs: Any) -> str:
     logging.debug(f"format_docs received: {type(docs)}")
     logging.debug(f"Contents of docs: {docs}")
+    
+    formatted = []
     
     if isinstance(docs, list):
         for doc in docs:
@@ -133,6 +134,8 @@ def format_docs(docs: List[Any]) -> str:
     elif isinstance(docs, dict):
         source = docs.get('metadata', {}).get('source', '알 수 없는 출처')
         formatted.append(f"출처: {source}")
+    elif isinstance(docs, str):
+        formatted.append(f"출처: {docs}")
     else:
         formatted.append(f"알 수 없는 형식의 문서 (타입: {type(docs)})")
     
@@ -241,12 +244,12 @@ def main():
         answer = prompt | llm | StrOutputParser()
         return (
             RunnableParallel(question=RunnablePassthrough(), docs=retriever)
-            .assign(context=format)
+            .assign(context=lambda x: format_docs(x['docs']))
             .assign(chat_history=lambda x: format_chat_history(st.session_state.chat_history))
             .assign(answer=answer)
             .pick(["answer", "docs"])
         )
-
+    
     def get_chatbot_chain(prompt):
         answer = prompt | llm | StrOutputParser()
         return (
