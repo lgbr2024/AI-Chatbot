@@ -145,12 +145,12 @@ def main():
 
     # Claude 모델 선택
     if "claude_model" not in st.session_state:
-        st.session_state.claude_model = "claude-3.5-sonnet-20240621"
+        st.session_state.claude_model = "claude-3-5-sonnet-20240620"
 
     st.session_state.claude_model = st.selectbox(
         "Select Claude model:",
-        ("claude-3-opus-20240229", "claude-3.5-sonnet-20240621"),
-        index=("claude-3-opus-20240229", "claude-3.5-sonnet-20240621").index(st.session_state.claude_model)
+        ("claude-3-opus-20240229", "claude-3-5-sonnet-20240620"),
+        index=("claude-3-opus-20240229", "claude-3-5-sonnet-20240620").index(st.session_state.claude_model)
     )
     llm = ChatAnthropic(model=st.session_state.claude_model)
 
