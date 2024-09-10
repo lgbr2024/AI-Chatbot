@@ -131,15 +131,15 @@ def main():
         return
     # Claude 모델 선택
     if "claude_model" not in st.session_state:
-    st.session_state.claude_model = "claude-3.5-sonnet-20240325"
+        st.session_state.claude_model = "claude-3.5-sonnet-20240325"
 
-    st.session_state.claude_model = st.selectbox(
-        "Select Claude model:",
-        ("claude-3-opus-20240229", "claude-3-sonnet-20240229", "claude-3.5-sonnet-20240325"),
-        index=("claude-3-opus-20240229", "claude-3-sonnet-20240229", "claude-3.5-sonnet-20240325").index(st.session_state.claude_model)
-    )
+        st.session_state.claude_model = st.selectbox(
+            "Select Claude model:",
+            ("claude-3-opus-20240229", "claude-3-sonnet-20240229", "claude-3.5-sonnet-20240325"),
+            index=("claude-3-opus-20240229", "claude-3-sonnet-20240229", "claude-3.5-sonnet-20240325").index(st.session_state.claude_model)
+        )
 
-llm = ChatAnthropic(model=st.session_state.claude_model)
+    llm = ChatAnthropic(model=st.session_state.claude_model)
     # Pinecone 벡터 스토어 설정
     try:
         vectorstore = ModifiedPineconeVectorStore(
