@@ -113,7 +113,7 @@ def format_docs(docs: List[Union[Document, str]]) -> str:
         else:
             source = f'Unknown source (type: {type(doc)})'
         formatted.append(f"Source: {source}")
-    return "\n\n" + "\n\n".join(formatted)    
+    return "\n\n" + "\n\n".join(formatted)
 
 def main():
     st.title("🤞Conference Q&A System")
