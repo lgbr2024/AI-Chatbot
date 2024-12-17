@@ -136,7 +136,7 @@ def main():
     # Pinecone 초기화
     try:
         pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
-        index_name = "itconference"
+        index_name = "aiconference"
         index = pc.Index(index_name)
     except Exception as e:
         logging.error(f"Pinecone 초기화 오류: {e}")
